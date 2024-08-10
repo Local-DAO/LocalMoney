@@ -8,8 +8,9 @@ import { defaultMicroDenomAvailable, denomsAvailable, displayToDenom } from '~/u
 import { fiatsAvailable } from '~/utils/fiat'
 import { checkValidOffer } from '~/utils/validations'
 import { AppEvents, trackAppEvents } from '~/analytics/analytics'
-import { AxelarQueryAPI, Environment } from '@axelar-network/axelarjs-sdk'
+import { AddGasOptions, AxelarGMPRecoveryAPI, AxelarQueryAPI, Environment, EvmChain } from '@axelar-network/axelarjs-sdk'
 import { defaultAbiCoder, arrayify, hexZeroPad, hexlify, toUtf8Bytes } from 'ethers/lib/utils'
+import { ethers } from 'ethers'
 
 const client = useClientStore()
 const route = useRoute()
@@ -91,8 +92,11 @@ onMounted(async () => {
   const axlApi = new AxelarQueryAPI({
     environment: Environment.MAINNET
   })
+  const axlGMPApi = new AxelarGMPRecoveryAPI({
+    environment: Environment.MAINNET
+  })
   const sourceChainId = 'avalanche'
-  const destinationChainId = 'kujira'
+  const destinationChainId = 'terra'
   const gasLimit = 3700000
   axlApi.estimateGasFee(sourceChainId, destinationChainId, gasLimit).then((res) => {
     console.log('AxelarGateway fees', res)
@@ -110,8 +114,10 @@ onMounted(async () => {
   const versionPrefix = arrayify(hexZeroPad(hexlify(2), 4))
   const versionedPayload = concatenate([ versionPrefix, payload ])
   console.log('versionedPayload', uint8ArrayToHex(versionedPayload))
-
-  // const newTradeBytes = abiEncoder.encode([ "string" ], [ newTradeString ])
+  // Recovery API - Add native gas to a transaction
+  const txHash = "0xaa3b28cfef7a3717b09ef8349918b66f2d334d7a9446476f485bae8726151965"
+  await window.ethereum.request({ method: "eth_requestAccounts" });
+  // await axlGMPApi.addNativeGas(EvmChain.AVALANCHE, txHash, 3700000)
 
 })
 
