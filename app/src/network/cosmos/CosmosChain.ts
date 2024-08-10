@@ -42,7 +42,6 @@ export class CosmosChain implements Chain {
     this.hubInfo.hubConfig = (await this.cwClient.queryContractSmart(this.hubInfo.hubAddress, {
       config: {},
     })) as HubConfig
-    // console.log("Factory config >> ", this.hubInfo.hubConfig)
   }
 
   getName() {
@@ -90,7 +89,6 @@ export class CosmosChain implements Chain {
       const result = (await this.cwClient!.queryContractSmart(this.hubInfo.hubConfig.profile_addr, {
         profile: { addr },
       })) as Profile
-      console.log('Profile result >> ', result)
       return result
     } catch (e) {
       throw DefaultError.fromError(e)
@@ -101,7 +99,6 @@ export class CosmosChain implements Chain {
     if (this.cwClient instanceof SigningCosmWasmClient && this.signer) {
       try {
         const balance = await this.cwClient.getBalance(this.getWalletAddress(), denomToValue(denom))
-        console.log(`balance: `, balance)
         return balance
       } catch (e) {
         throw DefaultError.fromError(e)
@@ -114,7 +111,6 @@ export class CosmosChain implements Chain {
   // TODO encrypt the postOffer.owner_contact field
   async createOffer(postOffer: PostOffer) {
     const msg = { create: { offer: postOffer } }
-    console.log('Create offer msg >> ', msg)
     if (this.cwClient instanceof SigningCosmWasmClient && this.signer) {
       try {
         const result = await this.cwClient.execute(
@@ -123,7 +119,6 @@ export class CosmosChain implements Chain {
           msg,
           'auto'
         )
-        console.log('Create offer result >> ', result)
         const offer_id = result.logs[0].events
           .find((e) => e.type === 'wasm')
           ?.attributes.find((a) => a.key === 'id')?.value
@@ -139,7 +134,6 @@ export class CosmosChain implements Chain {
   // TODO encrypt the postOffer.owner_contact field
   async updateOffer(updateOffer: PatchOffer) {
     const msg = { update_offer: { offer_update: updateOffer } }
-    console.log('Update offer msg >> ', msg)
     if (this.cwClient instanceof SigningCosmWasmClient && this.signer) {
       try {
         const result = await this.cwClient.execute(
@@ -148,7 +142,6 @@ export class CosmosChain implements Chain {
           msg,
           'auto'
         )
-        console.log('Update offer result >> ', result)
       } catch (e) {
         throw DefaultError.fromError(e)
       }
@@ -202,7 +195,6 @@ export class CosmosChain implements Chain {
         this.hubInfo.hubConfig.offer_addr,
         queryMsg
       )) as OfferResponse
-      console.log('response >>> ', response)
       return response
     } catch (e) {
       throw DefaultError.fromError(e)
@@ -229,7 +221,6 @@ export class CosmosChain implements Chain {
         this.hubInfo.hubConfig.offer_addr,
         queryMsg
       )) as OfferResponse[]
-      console.log('response >>> ', response)
       return response
     } catch (e) {
       throw DefaultError.fromError(e)
@@ -238,7 +229,6 @@ export class CosmosChain implements Chain {
 
   async openTrade(trade: NewTrade) {
     const msg = { create: trade }
-    console.log('Open Trade msg >> ', msg)
     if (this.cwClient instanceof SigningCosmWasmClient && this.signer) {
       try {
         const result = await this.cwClient.execute(
@@ -247,7 +237,6 @@ export class CosmosChain implements Chain {
           msg,
           'auto'
         )
-        console.log('Open Trade result >> ', result)
         const trade_id = result.logs[0].events
           .find((e) => e.type === 'wasm')
           ?.attributes.find((a) => a.key === 'trade_id')?.value
@@ -273,7 +262,6 @@ export class CosmosChain implements Chain {
         const response = (await this.cwClient!.queryContractSmart(this.hubInfo.hubConfig.trade_addr, {
           trades: { user: userAddr, role: 'trader', limit, last },
         })) as TradeInfo[]
-        console.log('response >>> ', response)
         return response
       } catch (e) {
         throw DefaultError.fromError(e)
@@ -303,7 +291,6 @@ export class CosmosChain implements Chain {
         const openDisputes = disputedTrades.filter((t) => t.trade.state === 'escrow_disputed')
         const closedDisputes = disputedTrades.filter((t) => t.trade.state !== 'escrow_disputed')
         const response: { openDisputes: TradeInfo[]; closedDisputes: TradeInfo[] } = { openDisputes, closedDisputes }
-        console.log('response >>> ', response)
         return response
       } catch (e) {
         throw DefaultError.fromError(e)
@@ -343,7 +330,6 @@ export class CosmosChain implements Chain {
         this.hubInfo.hubConfig.trade_addr,
         queryMsg
       )) as Arbitrator[]
-      console.log('response >>> ', response)
       return response
     } catch (e) {
       throw DefaultError.fromError(e)
@@ -367,7 +353,6 @@ export class CosmosChain implements Chain {
         this.hubInfo.hubConfig.trade_addr,
         queryMsg
       )) as TradeInfo[]
-      console.log('response >>> ', response)
       return response
     } catch (e) {
       throw DefaultError.fromError(e)
@@ -385,7 +370,6 @@ export class CosmosChain implements Chain {
         this.hubInfo.hubConfig.price_addr,
         queryMsg
       )) as DenomFiatPrice
-      console.log('response >>> ', response)
       return response
     } catch (e) {
       throw DefaultError.fromError(e)
@@ -408,7 +392,6 @@ export class CosmosChain implements Chain {
   async fundEscrow(tradeInfo: TradeInfo, makerContact?: string) {
     const hubConfig = this.hubInfo.hubConfig
     let fundAmount = Number(tradeInfo.trade.amount)
-    console.log('amount: ', fundAmount)
 
     // If current user is the maker, add the fee to the amount to fund
     if (tradeInfo.offer.offer.owner === this.getWalletAddress()) {
@@ -416,9 +399,7 @@ export class CosmosChain implements Chain {
       const chainAmount = Math.floor(hubConfig.chain_fee_pct * fundAmount)
       const warchestAmount = Math.floor(hubConfig.warchest_fee_pct * fundAmount)
       const totalFee = burnAmount + chainAmount + warchestAmount
-      console.log('total fee:', totalFee)
       fundAmount += totalFee
-      console.log('amount + fees: ', fundAmount)
     }
 
     const funds: Coin[] = [
@@ -427,7 +408,6 @@ export class CosmosChain implements Chain {
         denom: denomToValue(tradeInfo.trade.denom),
       },
     ]
-    console.log('funds', funds)
     await this.changeTradeState(
       this.hubInfo.hubConfig.trade_addr,
       { fund_escrow: { trade_id: tradeInfo.trade.id, maker_contact: makerContact } },
@@ -464,11 +444,9 @@ export class CosmosChain implements Chain {
   }
 
   private async changeTradeState(addr: string, msg: Record<string, unknown>, funds?: Coin[]) {
-    console.log('Trade State >> ', msg)
     if (this.cwClient instanceof SigningCosmWasmClient && this.signer) {
       try {
         const result = await this.cwClient.execute(this.getWalletAddress(), addr, msg, 'auto', undefined, funds)
-        console.log('Trade State result >> ', result)
       } catch (e) {
         throw DefaultError.fromError(e)
       }
@@ -479,7 +457,6 @@ export class CosmosChain implements Chain {
 
   async newArbitrator(arbitrator: Arbitrator) {
     const msg = { new_arbitrator: arbitrator }
-    console.log('New Arbitrator msg >> ', msg)
     if (this.cwClient instanceof SigningCosmWasmClient && this.signer) {
       try {
         const result = await this.cwClient.execute(
@@ -488,7 +465,6 @@ export class CosmosChain implements Chain {
           msg,
           'auto'
         )
-        console.log('New arbitrator result >> ', result)
       } catch (e) {
         throw DefaultError.fromError(e)
       }
@@ -499,7 +475,6 @@ export class CosmosChain implements Chain {
 
   async settleDispute(tradeId: number, winner: string) {
     const msg = { settle_dispute: { trade_id: tradeId, winner } }
-    console.log('msg >> ', msg)
     if (this.cwClient instanceof SigningCosmWasmClient && this.signer) {
       try {
         const result = await this.cwClient.execute(
@@ -508,7 +483,6 @@ export class CosmosChain implements Chain {
           msg,
           'auto'
         )
-        console.log('result >> ', result)
       } catch (e) {
         throw DefaultError.fromError(e)
       }
@@ -569,7 +543,7 @@ export class CosmosChain implements Chain {
         ],
       })
     } catch (e) {
-      console.log(e)
+      console.error(e)
     }
   }
 }
