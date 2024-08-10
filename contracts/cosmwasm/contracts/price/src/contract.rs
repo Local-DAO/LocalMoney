@@ -16,8 +16,7 @@ use localmoney_protocol::guards::{assert_migration_parameters, assert_ownership}
 use localmoney_protocol::hub_utils::{get_hub_admin, get_hub_config, register_hub_internal};
 use localmoney_protocol::price::{
     AssetInfo, CurrencyPrice, DenomFiatPrice, ExecuteMsg, NativeToken, OfferAsset, PriceRoute,
-    QueryMsg, Simulation, SimulationResponse, SimulationResponseData, SwapSimulation,
-    DENOM_PRICE_ROUTE, FIAT_PRICE,
+    QueryMsg, Simulation, SimulationResponseData, SwapSimulation, DENOM_PRICE_ROUTE, FIAT_PRICE,
 };
 use localmoney_protocol::profile::{InstantiateMsg, MigrateMsg};
 
@@ -125,6 +124,7 @@ pub fn query_fiat_price_for_denom(
     denom: Denom,
 ) -> StdResult<DenomFiatPrice> {
     //TODO: Move "uluna" to a cfg field.
+    /*
     let uluna = "uluna";
     let luna_price_route = DENOM_PRICE_ROUTE.load(deps.storage, &uluna);
     let luna_price_route = match luna_price_route {
@@ -179,6 +179,12 @@ pub fn query_fiat_price_for_denom(
         denom,
         fiat,
         price: denom_fiat_price,
+    })
+    */
+    Ok(DenomFiatPrice {
+        denom,
+        fiat,
+        price: Uint256::from_u128(1u128),
     })
 }
 
