@@ -15,7 +15,7 @@ pub struct InstantiateMsg {}
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     UpdateContact {
-        profile_addr: Addr,
+        profile_addr: String,
         contact: String,
         encryption_key: String,
     },
@@ -24,7 +24,7 @@ pub enum ExecuteMsg {
         offer_state: OfferState,
     },
     UpdateTradesCount {
-        profile_addr: Addr,
+        profile_addr: String,
         trade_state: TradeState,
     },
     RegisterHub {},
@@ -33,7 +33,7 @@ pub enum ExecuteMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    Profile { addr: Addr },
+    Profile { addr: String },
     Profiles { limit: u32, start_at: Option<u64> },
 }
 
@@ -44,7 +44,7 @@ pub struct MigrateMsg {}
 // Execute Util
 pub fn update_profile_contact_msg(
     profile_contract: String,
-    profile_addr: Addr,
+    profile_addr: String,
     contact: String,
     encryption_key: String,
 ) -> SubMsg {
@@ -62,7 +62,7 @@ pub fn update_profile_contact_msg(
 
 pub fn update_profile_trades_count_msg(
     contract_addr: String,
-    profile_addr: Addr,
+    profile_addr: String,
     trade_state: TradeState,
 ) -> SubMsg {
     SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
@@ -96,7 +96,7 @@ pub fn update_profile_active_offers_msg(
 pub fn load_profile<T: CustomQuery>(
     querier: &QuerierWrapper<T>,
     profile_contract: String,
-    profile_addr: Addr,
+    profile_addr: String,
 ) -> StdResult<Profile> {
     querier.query_wasm_smart(
         profile_contract,
@@ -118,7 +118,7 @@ pub fn load_profiles<T: CustomQuery>(
 // Data
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Profile {
-    pub addr: Addr,
+    pub addr: String,
     pub created_at: u64,
     pub requested_trades_count: u64,
     pub active_trades_count: u8,
@@ -130,7 +130,7 @@ pub struct Profile {
 }
 
 impl Profile {
-    pub fn new(addr: Addr, created_at: u64) -> Self {
+    pub fn new(addr: String, created_at: u64) -> Self {
         Profile {
             addr,
             created_at,
@@ -164,7 +164,7 @@ impl ProfileModel<'_> {
 
     pub fn from_store<'a>(
         storage: &'a mut dyn Storage,
-        profile_addr: Addr,
+        profile_addr: String,
     ) -> StdResult<ProfileModel<'a>> {
         match profiles().load(storage, profile_addr.to_string()) {
             Ok(profile) => Ok(ProfileModel { profile, storage }),
@@ -172,9 +172,9 @@ impl ProfileModel<'_> {
         }
     }
 
-    pub fn query_profile(storage: &dyn Storage, profile_addr: Addr) -> Profile {
+    pub fn query_profile(storage: &dyn Storage, profile_addr: String) -> Profile {
         profiles()
-            .load(storage, profile_addr.to_string())
+            .load(storage, profile_addr.clone())
             .unwrap_or(Profile::new(profile_addr, 0))
     }
 

@@ -59,18 +59,19 @@ fn update_profile_contact(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    profile_addr: Addr,
+    profile_addr: String,
     contact: String,
     encryption_key: String,
 ) -> Result<Response, ContractError> {
     let hub_config = get_hub_config(deps.as_ref());
     let owners = vec![
         profile_addr.clone(),
-        hub_config.trade_addr,
-        hub_config.offer_addr,
+        hub_config.trade_addr.to_string(),
+        hub_config.offer_addr.to_string(),
     ];
     // Only the trade/offer contract or the profile owner should be able to update profile
-    assert_multiple_ownership(info.sender, owners).unwrap();
+    let sender = info.sender.to_string();
+    assert_multiple_ownership(sender, owners).unwrap();
 
     let storage = deps.storage;
     let mut profile = ProfileModel::query_profile(storage, profile_addr.clone());
@@ -94,12 +95,12 @@ pub fn update_trades_count(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    profile_addr: Addr,
+    profile_addr: String,
     trade_state: TradeState,
 ) -> Result<Response, ContractError> {
     // Only the trade contract should be able to call this method.
     let hub_config = get_hub_config(deps.as_ref());
-    assert_ownership(info.sender, hub_config.trade_addr).unwrap();
+    assert_ownership(info.sender.to_string(), hub_config.trade_addr.to_string()).unwrap();
 
     let mut profile_model = ProfileModel::from_store(deps.storage, profile_addr.clone()).unwrap();
     let profile = &mut profile_model.profile;
@@ -165,9 +166,11 @@ pub fn update_active_offers(
 ) -> Result<Response, ContractError> {
     // Only the Offer contract should be able to call this method.
     let hub_config = get_hub_config(deps.as_ref());
-    assert_ownership(info.sender, hub_config.offer_addr)?;
+    let sender = info.sender.clone().to_string();
+    assert_ownership(sender.clone(), hub_config.offer_addr.to_string())?;
 
-    let mut profile_model = ProfileModel::from_store(deps.storage, profile_addr.clone()).unwrap();
+    let mut profile_model =
+        ProfileModel::from_store(deps.storage, profile_addr.clone().to_string()).unwrap();
     let profile = &mut profile_model.profile;
 
     match offer_state {

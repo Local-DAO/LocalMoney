@@ -2,10 +2,10 @@ use crate::constants::{MAX_ITEMS_PER_PAGE, MIN_ITEMS_PER_PAGE, OFFER_DESCRIPTION
 use crate::errors::ContractError;
 use crate::offer::OfferType;
 use crate::trade::{Trade, TradeState};
-use cosmwasm_std::{Addr, Uint128, Uint256};
+use cosmwasm_std::{Uint128, Uint256};
 use cw2::ContractVersion;
 
-pub fn assert_multiple_ownership(caller: Addr, owners: Vec<Addr>) -> Result<(), ContractError> {
+pub fn assert_multiple_ownership(caller: String, owners: Vec<String>) -> Result<(), ContractError> {
     if owners.contains(&caller) {
         Ok(())
     } else {
@@ -13,7 +13,7 @@ pub fn assert_multiple_ownership(caller: Addr, owners: Vec<Addr>) -> Result<(), 
     }
 }
 
-pub fn assert_ownership(caller: Addr, owner: Addr) -> Result<(), ContractError> {
+pub fn assert_ownership(caller: String, owner: String) -> Result<(), ContractError> {
     if caller.eq(&owner) {
         Ok(())
     } else {
@@ -22,9 +22,9 @@ pub fn assert_ownership(caller: Addr, owner: Addr) -> Result<(), ContractError> 
 }
 
 pub fn assert_sender_is_buyer_or_seller(
-    sender: Addr,
-    buyer: Addr,
-    seller: Addr,
+    sender: String,
+    buyer: String,
+    seller: String,
 ) -> Result<(), ContractError> {
     if sender.eq(&buyer) || sender.eq(&seller) {
         Ok(())

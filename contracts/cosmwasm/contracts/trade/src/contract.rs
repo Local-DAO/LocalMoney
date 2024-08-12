@@ -67,16 +67,41 @@ pub fn execute(
         ExecuteMsg::FundEscrow {
             trade_id,
             maker_contact,
-        } => fund_escrow(deps, env, info, trade_id, maker_contact),
-        ExecuteMsg::ReleaseEscrow { trade_id } => release_escrow(deps, env, info, trade_id),
-        ExecuteMsg::FiatDeposited { trade_id } => fiat_deposited(deps, env, info, trade_id),
-        ExecuteMsg::CancelRequest { trade_id } => cancel_request(deps, env, info, trade_id),
-        ExecuteMsg::RefundEscrow { trade_id } => refund_escrow(deps, env, info, trade_id),
+        } => {
+            let sender = info.sender.to_string();
+            fund_escrow(deps, env, info, sender, trade_id, maker_contact)
+        }
+        ExecuteMsg::ReleaseEscrow { trade_id } => {
+            let sender = info.sender.to_string();
+            release_escrow(deps, env, sender, trade_id)
+        }
+        ExecuteMsg::FiatDeposited { trade_id } => {
+            let sender = info.sender.to_string();
+            fiat_deposited(deps, env, sender, trade_id)
+        }
+        ExecuteMsg::CancelRequest { trade_id } => {
+            let sender = info.sender.to_string();
+            cancel_request(deps, env, info, sender, trade_id)
+        }
+        ExecuteMsg::RefundEscrow { trade_id } => {
+            let sender = info.sender.to_string();
+            refund_escrow(deps, env, sender, trade_id)
+        }
         ExecuteMsg::DisputeEscrow {
             trade_id,
             buyer_contact,
             seller_contact,
-        } => dispute_escrow(deps, env, info, trade_id, buyer_contact, seller_contact),
+        } => {
+            let disputant = info.sender.to_string();
+            dispute_escrow(
+                deps,
+                env,
+                trade_id,
+                disputant,
+                buyer_contact,
+                seller_contact,
+            )
+        }
         ExecuteMsg::NewArbitrator {
             arbitrator,
             fiat,
@@ -117,7 +142,6 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 pub fn _create_trade(
     deps: DepsMut,
     env: Env,
-    sender: Addr,
     new_trade: NewTrade,
 ) -> Result<Vec<SubMsg>, ContractError> {
     // Load Hub Cfg
@@ -140,10 +164,10 @@ pub fn _create_trade(
     assert_value_in_range(offer.min_amount, offer.max_amount, new_trade.amount.clone())?;
 
     // Can't create Trade with the same wallet
-    if sender.eq(&offer.owner) {
+    if new_trade.taker.eq(&offer.owner.to_string()) {
         return Err(ContractError::Unauthorized {
-            owner: offer.owner,
-            caller: sender,
+            owner: offer.owner.to_string(),
+            caller: new_trade.taker,
         });
     }
 
@@ -199,20 +223,20 @@ pub fn _create_trade(
     }
 
     //Instantiate buyer and seller addresses according to Offer type (buy, sell)
-    let buyer: Addr;
+    let buyer: String;
+    let seller: String;
     let buyer_contact: Option<String>;
-    let seller: Addr;
     let seller_contact: Option<String>;
 
     if offer.offer_type == OfferType::Buy {
-        buyer = offer.owner.clone(); // maker
+        buyer = offer.owner.clone().to_string(); // maker
         buyer_contact = None; // maker
         seller = new_trade.taker.clone(); // taker
         seller_contact = Some(new_trade.taker_contact); // taker
     } else {
         buyer = new_trade.taker.clone(); // taker
         buyer_contact = Some(new_trade.taker_contact); // taker
-        seller = offer.owner.clone(); // maker
+        seller = offer.owner.clone().to_string(); // maker
         seller_contact = None // maker
     }
 
@@ -247,7 +271,6 @@ pub fn _create_trade(
         deps.storage,
         Trade::new(
             trade_id.clone(),
-            env.contract.address.clone(),
             buyer.clone(),
             seller.clone(),
             seller_contact,
@@ -280,10 +303,10 @@ pub fn _create_trade(
 fn create_trade(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     new_trade: NewTrade,
 ) -> Result<Response, ContractError> {
-    let sub_msgs = _create_trade(deps, env, info.sender, new_trade)?;
+    let sub_msgs = _create_trade(deps, env, new_trade)?;
     let res = Response::new().add_submessages(sub_msgs);
     Ok(res)
 }
@@ -338,7 +361,7 @@ fn query_trade<T: CustomQuery>(env: Env, deps: Deps<T>, id: u64) -> StdResult<Tr
     let arbitrator = load_profile(
         &deps.querier,
         hub_config.profile_addr.to_string(),
-        state.arbitrator.clone(),
+        state.arbitrator.clone().to_string(),
     )
     .unwrap();
 
@@ -399,7 +422,7 @@ pub fn query_trades<T: CustomQuery>(
         let arbitrator = load_profile(
             &deps.querier,
             hub_config.profile_addr.to_string(),
-            trade.arbitrator.clone(),
+            trade.arbitrator.clone().to_string(),
         )
         .unwrap();
 
@@ -418,6 +441,7 @@ fn fund_escrow(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
+    sender: String,
     trade_id: u64,
     maker_contact: Option<String>,
 ) -> Result<Response, ContractError> {
@@ -448,7 +472,7 @@ fn fund_escrow(
 
     // Everybody can set the state to RequestExpired, if it is expired (they are doing as a favor).
     if trade.request_expired(env.block.time.seconds()) {
-        trade.set_state(TradeState::RequestExpired, &env, &info);
+        trade.set_state(TradeState::RequestExpired, &env, &sender);
         TradeModel::store(deps.storage, &trade).unwrap();
 
         return Err(TradeExpired {
@@ -458,7 +482,7 @@ fn fund_escrow(
     }
 
     // Only the seller wallet is authorized to fund this trade.
-    assert_ownership(info.sender.clone(), trade.seller.clone())?;
+    assert_ownership(sender.clone(), trade.seller.clone())?;
 
     // If seller_contact is not already defined it needs to be defined here
     if trade.seller_contact.is_none() {
@@ -492,7 +516,7 @@ fn fund_escrow(
     }
 
     // Set the state to EscrowFunded and store the trade
-    trade.set_state(TradeState::EscrowFunded, &env, &info);
+    trade.set_state(TradeState::EscrowFunded, &env, &sender);
     TradeModel::store(deps.storage, &trade).unwrap();
 
     let mut sub_msgs: Vec<SubMsg> = vec![];
@@ -528,7 +552,8 @@ fn accept_request(
 ) -> Result<Response, ContractError> {
     let mut trade = TradeModel::from_store(deps.storage, trade_id);
     // Only the buyer can accept the request
-    assert_ownership(info.sender.clone(), trade.buyer.clone()).unwrap();
+    let sender = info.sender.to_string();
+    assert_ownership(sender.clone(), trade.buyer.clone()).unwrap();
 
     // Only change state if the current state is TradeState::RequestCreated
     assert_trade_state_change_is_valid(
@@ -539,7 +564,7 @@ fn accept_request(
     .unwrap();
 
     // Change trade state
-    trade.set_state(TradeState::RequestAccepted, &env, &info);
+    trade.set_state(TradeState::RequestAccepted, &env, &sender);
 
     // Set maker contact as buyer
     trade.buyer_contact = Some(maker_contact);
@@ -568,14 +593,14 @@ fn accept_request(
 fn fiat_deposited(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    sender: String,
     trade_id: u64,
 ) -> Result<Response, ContractError> {
     let hub_config = get_hub_config(deps.as_ref());
     let mut trade = TradeModel::from_store(deps.storage, trade_id);
     // The buyer is always the one depositing fiat
     // Only the buyer can mark the fiat as deposited
-    assert_ownership(info.sender.clone(), trade.buyer.clone()).unwrap();
+    assert_ownership(sender.clone(), trade.buyer.clone()).unwrap();
     assert_trade_state_change_is_valid(
         trade.get_state(),
         TradeState::EscrowFunded,
@@ -584,7 +609,7 @@ fn fiat_deposited(
     .unwrap();
 
     // Update trade State to TradeState::FiatDeposited
-    trade.set_state(TradeState::FiatDeposited, &env, &info);
+    trade.set_state(TradeState::FiatDeposited, &env, &sender);
     // Sets the time that will enable the dispute
     let enables_dispute_at = env.block.time.seconds() + hub_config.trade_dispute_timer;
     trade.enables_dispute_at = Some(enables_dispute_at);
@@ -603,16 +628,13 @@ fn cancel_request(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
+    sender: String,
     trade_id: u64,
 ) -> Result<Response, ContractError> {
     let mut trade = TradeModel::from_store(deps.storage, trade_id);
     // Only the buyer or seller can cancel the trade.
-    assert_sender_is_buyer_or_seller(
-        info.sender.clone(),
-        trade.buyer.clone(),
-        trade.seller.clone(),
-    )
-    .unwrap();
+    assert_sender_is_buyer_or_seller(sender.clone(), trade.buyer.clone(), trade.seller.clone())
+        .unwrap();
 
     // The trade can be canceled if the state is RequestAccepted or RequestCreated
     let mut allowed_states = vec![TradeState::RequestAccepted, TradeState::RequestCreated];
@@ -645,10 +667,10 @@ fn cancel_request(
 
     if trade.get_state().eq(&TradeState::EscrowFunded) {
         // Update trade State to TradeState::EscrowCanceled
-        trade.set_state(TradeState::EscrowCanceled, &env, &info);
+        trade.set_state(TradeState::EscrowCanceled, &env, &sender);
     } else {
         // Update trade State to TradeState::RequestCanceled
-        trade.set_state(TradeState::RequestCanceled, &env, &info);
+        trade.set_state(TradeState::RequestCanceled, &env, &sender);
     }
     TradeModel::store(deps.storage, &trade).unwrap();
 
@@ -658,16 +680,16 @@ fn cancel_request(
     Ok(res)
 }
 
-fn release_escrow(
+pub fn release_escrow(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    sender: String,
     trade_id: u64,
 ) -> Result<Response, ContractError> {
     // Load trade and validate that permission and state are valid.
     let mut trade = TradeModel::from_store(deps.storage, trade_id);
     let trade_denom = denom_to_string(&trade.denom);
-    if trade.seller.eq(&info.sender) {
+    if trade.seller.eq(&sender) {
         assert_trade_state_change_is_valid(
             trade.get_state(),
             TradeState::FiatDeposited,
@@ -677,7 +699,7 @@ fn release_escrow(
     } else {
         return Err(ContractError::Unauthorized {
             owner: trade.seller.clone(),
-            caller: info.sender.clone(),
+            caller: sender.clone(),
         });
     }
 
@@ -685,7 +707,7 @@ fn release_escrow(
     let hub_config = get_hub_config(deps.as_ref());
 
     // Update trade State to TradeState::EscrowReleased
-    trade.set_state(TradeState::EscrowReleased, &env, &info);
+    trade.set_state(TradeState::EscrowReleased, &env, &sender);
     TradeModel::store(deps.storage, &trade).unwrap();
 
     // Load the offer related to this trade
@@ -736,10 +758,11 @@ fn release_escrow(
     Ok(res)
 }
 
+///
 fn refund_escrow(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    sender: String,
     trade_id: u64,
 ) -> Result<Response, ContractError> {
     // Refund can only happen if trade state is TradeState::EscrowFunded and FundingTimeout is expired
@@ -767,7 +790,7 @@ fn refund_escrow(
     let mut trade: Trade = TradeModel::from_store(deps.storage, trade_id);
 
     //Update trade state to TradeState::EscrowRefunded
-    trade.set_state(TradeState::EscrowRefunded, &env, &info);
+    trade.set_state(TradeState::EscrowRefunded, &env, &sender);
     TradeModel::store(deps.storage, &trade).unwrap();
 
     let hub_config = get_hub_config(deps.as_ref());
@@ -799,7 +822,7 @@ pub fn create_arbitrator(
 ) -> Result<Response, ContractError> {
     let admin = get_hub_admin(deps.as_ref()).addr;
     let hub_config = get_hub_config(deps.as_ref());
-    assert_ownership(info.sender, admin)?;
+    assert_ownership(info.sender.to_string(), admin.to_string())?;
 
     ArbitratorModel::create_arbitrator(
         deps.storage,
@@ -811,7 +834,7 @@ pub fn create_arbitrator(
 
     let create_profile_sub_msg = update_profile_contact_msg(
         hub_config.profile_addr.to_string(),
-        arbitrator_address.clone(),
+        arbitrator_address.clone().to_string(),
         "N/A".to_string(),
         encryption_key.clone(),
     );
@@ -833,7 +856,8 @@ pub fn delete_arbitrator(
     fiat: FiatCurrency,
 ) -> Result<Response, ContractError> {
     let admin = get_hub_admin(deps.as_ref());
-    assert_ownership(info.sender, admin.addr)?;
+    let sender = info.sender.clone().to_string();
+    assert_ownership(sender, admin.addr.to_string())?;
 
     let index = arbitrator.clone().to_string() + &fiat.to_string();
 
@@ -850,20 +874,16 @@ pub fn delete_arbitrator(
 fn dispute_escrow(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
     trade_id: u64,
+    disputant: String,
     buyer_contact: String,
     seller_contact: String,
 ) -> Result<Response, ContractError> {
     let mut trade = TradeModel::from_store(deps.storage, trade_id);
     // TODO: check escrow funding timer*
     // Only the buyer or seller can start a dispute
-    assert_sender_is_buyer_or_seller(
-        info.sender.clone(),
-        trade.buyer.clone(),
-        trade.seller.clone(),
-    )
-    .unwrap();
+    assert_sender_is_buyer_or_seller(disputant.clone(), trade.buyer.clone(), trade.seller.clone())
+        .unwrap();
 
     // Users can only start a dispute once the buyer has clicked `mark paid` after the fiat has been deposited
     assert_trade_state_change_is_valid(
@@ -883,7 +903,7 @@ fn dispute_escrow(
     }
 
     // Update trade State to TradeState::Disputed and sets arbitrator
-    trade.set_state(TradeState::EscrowDisputed, &env, &info);
+    trade.set_state(TradeState::EscrowDisputed, &env, &disputant);
     trade.arbitrator_buyer_contact = Some(buyer_contact);
     trade.arbitrator_seller_contact = Some(seller_contact);
     TradeModel::store(deps.storage, &trade).unwrap();
@@ -902,7 +922,7 @@ fn settle_dispute(
     env: Env,
     info: MessageInfo,
     trade_id: u64,
-    winner: Addr,
+    winner: String,
 ) -> Result<Response, ContractError> {
     let hub_config = get_hub_config(deps.as_ref());
     let mut trade = TradeModel::from_store(deps.storage, trade_id);
@@ -910,8 +930,8 @@ fn settle_dispute(
     // Check if caller is the arbitrator of the given trade
     if trade.arbitrator.ne(&info.sender) {
         return Err(ContractError::Unauthorized {
-            owner: trade.arbitrator.clone(),
-            caller: info.sender,
+            owner: trade.arbitrator.clone().to_string(),
+            caller: info.sender.to_string(),
         });
     }
 
@@ -941,10 +961,11 @@ fn settle_dispute(
     };
 
     // Check if winner is eligible, it must be either maker or taker
+    let sender = info.sender.clone().to_string();
     if winner.eq(&maker) {
-        trade.set_state(TradeState::SettledForMaker, &env, &info);
+        trade.set_state(TradeState::SettledForMaker, &env, &sender);
     } else if winner.eq(&taker) {
-        trade.set_state(TradeState::SettledForTaker, &env, &info)
+        trade.set_state(TradeState::SettledForTaker, &env, &sender)
     } else {
         return Err(ContractError::InvalidSender {
             sender: winner,
@@ -980,7 +1001,7 @@ fn settle_dispute(
     let winner_amount = vec![Coin::new(release_amount.u128(), denom.clone())];
     send_msgs.push(SubMsg::new(create_send_msg(winner.clone(), winner_amount)));
     send_msgs.push(SubMsg::new(create_send_msg(
-        trade.arbitrator.clone(),
+        trade.arbitrator.clone().to_string(),
         arbitration_fee,
     )));
 
@@ -1011,7 +1032,7 @@ fn register_conversion_route_for_denom(
 ) -> Result<Response, ContractError> {
     // Check if caller is the hub contract's admin
     let admin = get_hub_admin(deps.as_ref()).addr;
-    assert_ownership(info.sender, admin)?;
+    assert_ownership(info.sender.to_string(), admin.to_string())?;
 
     // Store conversion route
     let denom = denom_to_string(&denom);
@@ -1147,8 +1168,8 @@ fn handle_swap_reply(deps: DepsMut, _msg: Reply) -> Result<Response, ContractErr
 // Create sub messages for updating trades count fields on maker and taker profiles
 fn create_update_trades_count_msgs(
     profile_addr: String,
-    buyer: Addr,
-    seller: Addr,
+    buyer: String,
+    seller: String,
     trade_state: TradeState,
 ) -> Vec<SubMsg> {
     let update_buyer =
@@ -1160,11 +1181,8 @@ fn create_update_trades_count_msgs(
 
 // region utils
 // Creates a BankMsg::Send message
-fn create_send_msg(to_address: Addr, amount: Vec<Coin>) -> CosmosMsg {
-    CosmosMsg::Bank(BankMsg::Send {
-        to_address: to_address.to_string(),
-        amount,
-    })
+fn create_send_msg(to_address: String, amount: Vec<Coin>) -> CosmosMsg {
+    CosmosMsg::Bank(BankMsg::Send { to_address, amount })
 }
 
 /// Returns a FeeInfo struct containing the calculated fees and the final release amount.

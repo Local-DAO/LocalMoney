@@ -89,28 +89,6 @@ pub fn do_ibc_packet_receive(
     }
 }
 
-//TODO: Use cw_serde
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub enum IbcExecuteMsg {
-    Create { new_trade: NewTrade },
-}
-
-fn execute_create_trade(
-    deps: DepsMut,
-    env: Env,
-    channel: String,
-    new_trade: NewTrade,
-) -> Result<IbcReceiveResponse, ContractError> {
-    let sender = new_trade.taker.clone();
-    let sub_msgs = _create_trade(deps, env, sender, new_trade)?;
-    let mut ibc_res = IbcReceiveResponse::new().set_ack(make_ack_success());
-    for msg in sub_msgs {
-        ibc_res = ibc_res.add_message(msg.msg);
-    }
-    ibc_res = ibc_res.add_attribute("channel", channel);
-    Ok(ibc_res)
-}
-
 #[entry_point]
 pub fn ibc_packet_ack(
     _deps: DepsMut,
@@ -200,4 +178,27 @@ pub fn make_ack_success() -> Binary {
 pub fn make_ack_fail(err: String) -> Binary {
     let res = Ack::Error(err);
     to_binary(&res).unwrap()
+}
+
+/// IBC Messages
+///
+//TODO: Use cw_serde
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub enum IbcExecuteMsg {
+    Create { new_trade: NewTrade },
+}
+
+fn execute_create_trade(
+    deps: DepsMut,
+    env: Env,
+    channel: String,
+    new_trade: NewTrade,
+) -> Result<IbcReceiveResponse, ContractError> {
+    let sub_msgs = _create_trade(deps, env, new_trade)?;
+    let mut ibc_res = IbcReceiveResponse::new().set_ack(make_ack_success());
+    for msg in sub_msgs {
+        ibc_res = ibc_res.add_message(msg.msg);
+    }
+    ibc_res = ibc_res.add_attribute("channel", channel);
+    Ok(ibc_res)
 }

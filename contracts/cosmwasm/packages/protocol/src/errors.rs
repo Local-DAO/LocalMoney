@@ -1,15 +1,15 @@
 use crate::offer::OfferState;
 use crate::trade::TradeState;
-use cosmwasm_std::{Addr, StdError, Uint128, Uint256, Uint64};
+use cosmwasm_std::{StdError, Uint128, Uint256, Uint64};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ContractError {
     /// General Errors
     #[error("Unauthorized.")]
-    Unauthorized { owner: Addr, caller: Addr },
+    Unauthorized { owner: String, caller: String },
     #[error("Unauthorized.")]
-    UnauthorizedMultipleOwnership { owners: Vec<Addr>, caller: Addr },
+    UnauthorizedMultipleOwnership { owners: Vec<String>, caller: String },
     #[error("The parameter {0} is invalid. {1}", parameter, message.clone().unwrap_or_default())]
     InvalidParameter {
         parameter: String,
@@ -60,9 +60,9 @@ pub enum ContractError {
     InvalidPriceForDenom {},
     #[error("Invalid sender, must be Trade's buyer or seller.")]
     InvalidSender {
-        sender: Addr,
-        buyer: Addr,
-        seller: Addr,
+        sender: String,
+        buyer: String,
+        seller: String,
     },
     #[error("Invalid trade amount. Amount: {amount:?}. Min: {min_amount:?}. Max: {max_amount:?}.")]
     InvalidTradeAmount {
