@@ -2,8 +2,8 @@ use std::fmt::{self, Display};
 use std::ops::{Add, Mul};
 
 use cosmwasm_std::{
-    Addr, BlockInfo, Coin, CustomQuery, Decimal, Deps, Env, Order, StdResult, Storage,
-    Uint128, Uint256,
+    Addr, BlockInfo, Coin, CustomQuery, Decimal, Deps, Env, Order, StdResult, Storage, Uint128,
+    Uint256,
 };
 use cw20::Denom;
 use cw_storage_plus::{Bound, Index, IndexList, IndexedMap, Item, Map, MultiIndex, UniqueIndex};
@@ -209,6 +209,7 @@ pub struct Trade {
     pub fiat: FiatCurrency,
     pub denom_fiat_price: Uint256,
     pub state_history: Vec<TradeStateItem>,
+    pub source_chain: String,
     state: TradeState,
 }
 
@@ -228,6 +229,7 @@ impl Trade {
         amount: Uint128,
         fiat: FiatCurrency,
         denom_fiat_price: Uint256,
+        source_chain: String,
         state_history: Vec<TradeStateItem>,
     ) -> Trade {
         return Trade {
@@ -249,6 +251,7 @@ impl Trade {
             fiat,
             denom_fiat_price,
             state_history,
+            source_chain,
             state: TradeState::RequestCreated,
         };
     }

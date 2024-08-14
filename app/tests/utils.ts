@@ -31,6 +31,7 @@ export function createHubUpdateConfigMsg(offerAddr: string, tradeAddr: string, p
       chain_fee_pct: '0.003', // 0.3%
       warchest_fee_pct: '0.005', // 0.5%
       trade_expiration_timer: TRADE_EXPIRATION_TIMER,
+      source_chain: process.env.SOURCE_CHAIN,
       trade_dispute_timer: TRADE_DISPUTE_TIMER,
     },
   }

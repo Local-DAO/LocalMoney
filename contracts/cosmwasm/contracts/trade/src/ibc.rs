@@ -4,7 +4,7 @@ use cosmwasm_std::{
     IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg, IbcReceiveResponse, StdResult,
 };
 use cw_storage_plus::Map;
-use localmoney_protocol::{errors::ContractError, trade::NewTrade};
+use localmoney_protocol::{errors::ContractError, guards::assert_auth, trade::NewTrade};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -85,7 +85,14 @@ pub fn do_ibc_packet_receive(
     let msg: IbcExecuteMsg = from_binary(&msg.packet.data)?;
 
     match msg {
-        IbcExecuteMsg::Create { new_trade } => execute_create_trade(deps, env, channel, new_trade),
+        IbcExecuteMsg::Create {
+            source_address,
+            source_chain,
+            new_trade,
+        } => {
+            // assert_auth(source_address, new_trade.taker.clone())?;
+            execute_create_trade(deps, env, channel, new_trade, source_chain)
+        }
     }
 }
 
@@ -185,7 +192,11 @@ pub fn make_ack_fail(err: String) -> Binary {
 //TODO: Use cw_serde
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub enum IbcExecuteMsg {
-    Create { new_trade: NewTrade },
+    Create {
+        source_address: String,
+        source_chain: String,
+        new_trade: NewTrade,
+    },
 }
 
 fn execute_create_trade(
@@ -193,8 +204,9 @@ fn execute_create_trade(
     env: Env,
     channel: String,
     new_trade: NewTrade,
+    source_chain: String,
 ) -> Result<IbcReceiveResponse, ContractError> {
-    let sub_msgs = _create_trade(deps, env, new_trade)?;
+    let sub_msgs = _create_trade(deps, env, new_trade, source_chain)?;
     let mut ibc_res = IbcReceiveResponse::new().set_ack(make_ack_success());
     for msg in sub_msgs {
         ibc_res = ibc_res.add_message(msg.msg);

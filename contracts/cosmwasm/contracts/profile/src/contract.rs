@@ -5,7 +5,7 @@ use cw2::{get_contract_version, set_contract_version};
 use localmoney_protocol::errors::ContractError;
 use localmoney_protocol::errors::ContractError::HubAlreadyRegistered;
 use localmoney_protocol::guards::{
-    assert_migration_parameters, assert_multiple_ownership, assert_ownership,
+    assert_migration_parameters, assert_multiple_ownership, assert_auth,
 };
 use localmoney_protocol::hub_utils::{get_hub_config, register_hub_internal};
 use localmoney_protocol::offer::OfferState;
@@ -100,7 +100,7 @@ pub fn update_trades_count(
 ) -> Result<Response, ContractError> {
     // Only the trade contract should be able to call this method.
     let hub_config = get_hub_config(deps.as_ref());
-    assert_ownership(info.sender.to_string(), hub_config.trade_addr.to_string()).unwrap();
+    assert_auth(info.sender.to_string(), hub_config.trade_addr.to_string()).unwrap();
 
     let mut profile_model = ProfileModel::from_store(deps.storage, profile_addr.clone()).unwrap();
     let profile = &mut profile_model.profile;
@@ -167,7 +167,7 @@ pub fn update_active_offers(
     // Only the Offer contract should be able to call this method.
     let hub_config = get_hub_config(deps.as_ref());
     let sender = info.sender.clone().to_string();
-    assert_ownership(sender.clone(), hub_config.offer_addr.to_string())?;
+    assert_auth(sender.clone(), hub_config.offer_addr.to_string())?;
 
     let mut profile_model =
         ProfileModel::from_store(deps.storage, profile_addr.clone().to_string()).unwrap();

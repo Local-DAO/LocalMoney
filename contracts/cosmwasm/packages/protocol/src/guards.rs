@@ -13,7 +13,7 @@ pub fn assert_multiple_ownership(caller: String, owners: Vec<String>) -> Result<
     }
 }
 
-pub fn assert_ownership(caller: String, owner: String) -> Result<(), ContractError> {
+pub fn assert_auth(caller: String, owner: String) -> Result<(), ContractError> {
     if caller.eq(&owner) {
         Ok(())
     } else {

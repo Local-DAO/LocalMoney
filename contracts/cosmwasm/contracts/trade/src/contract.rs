@@ -15,7 +15,7 @@ use localmoney_protocol::errors::ContractError::{
     OfferNotFound, RefundErrorNotExpired, TradeExpired,
 };
 use localmoney_protocol::guards::{
-    assert_migration_parameters, assert_ownership, assert_sender_is_buyer_or_seller,
+    assert_auth, assert_migration_parameters, assert_sender_is_buyer_or_seller,
     assert_trade_state_and_type, assert_trade_state_change, assert_trade_state_change_is_valid,
     assert_value_in_range, validate_min_max_items_per_page,
 };
@@ -63,7 +63,10 @@ pub fn execute(
         ExecuteMsg::AcceptRequest {
             trade_id,
             maker_contact,
-        } => accept_request(deps, env, info, trade_id, maker_contact),
+        } => {
+            let sender = info.sender.to_string();
+            accept_request(deps, env, sender, trade_id, maker_contact)
+        }
         ExecuteMsg::FundEscrow {
             trade_id,
             maker_contact,
@@ -143,6 +146,7 @@ pub fn _create_trade(
     deps: DepsMut,
     env: Env,
     new_trade: NewTrade,
+    source_chain: String,
 ) -> Result<Vec<SubMsg>, ContractError> {
     // Load Hub Cfg
     let hub_cfg = get_hub_config(deps.as_ref());
@@ -284,6 +288,7 @@ pub fn _create_trade(
             new_trade.amount.clone(),
             offer.fiat_currency,
             denom_final_price,
+            source_chain,
             trade_state_history,
         ),
     )
@@ -306,7 +311,8 @@ fn create_trade(
     _info: MessageInfo,
     new_trade: NewTrade,
 ) -> Result<Response, ContractError> {
-    let sub_msgs = _create_trade(deps, env, new_trade)?;
+    let hub_config = get_hub_config(deps.as_ref());
+    let sub_msgs = _create_trade(deps, env, new_trade, hub_config.source_chain)?;
     let res = Response::new().add_submessages(sub_msgs);
     Ok(res)
 }
@@ -482,7 +488,7 @@ fn fund_escrow(
     }
 
     // Only the seller wallet is authorized to fund this trade.
-    assert_ownership(sender.clone(), trade.seller.clone())?;
+    assert_auth(sender.clone(), trade.seller.clone())?;
 
     // If seller_contact is not already defined it needs to be defined here
     if trade.seller_contact.is_none() {
@@ -546,14 +552,13 @@ fn fund_escrow(
 fn accept_request(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    sender: String,
     trade_id: u64,
     maker_contact: String,
 ) -> Result<Response, ContractError> {
     let mut trade = TradeModel::from_store(deps.storage, trade_id);
     // Only the buyer can accept the request
-    let sender = info.sender.to_string();
-    assert_ownership(sender.clone(), trade.buyer.clone()).unwrap();
+    assert_auth(sender.clone(), trade.buyer.clone()).unwrap();
 
     // Only change state if the current state is TradeState::RequestCreated
     assert_trade_state_change_is_valid(
@@ -600,7 +605,7 @@ fn fiat_deposited(
     let mut trade = TradeModel::from_store(deps.storage, trade_id);
     // The buyer is always the one depositing fiat
     // Only the buyer can mark the fiat as deposited
-    assert_ownership(sender.clone(), trade.buyer.clone()).unwrap();
+    assert_auth(sender.clone(), trade.buyer.clone()).unwrap();
     assert_trade_state_change_is_valid(
         trade.get_state(),
         TradeState::EscrowFunded,
@@ -822,7 +827,7 @@ pub fn create_arbitrator(
 ) -> Result<Response, ContractError> {
     let admin = get_hub_admin(deps.as_ref()).addr;
     let hub_config = get_hub_config(deps.as_ref());
-    assert_ownership(info.sender.to_string(), admin.to_string())?;
+    assert_auth(info.sender.to_string(), admin.to_string())?;
 
     ArbitratorModel::create_arbitrator(
         deps.storage,
@@ -857,7 +862,7 @@ pub fn delete_arbitrator(
 ) -> Result<Response, ContractError> {
     let admin = get_hub_admin(deps.as_ref());
     let sender = info.sender.clone().to_string();
-    assert_ownership(sender, admin.addr.to_string())?;
+    assert_auth(sender, admin.addr.to_string())?;
 
     let index = arbitrator.clone().to_string() + &fiat.to_string();
 
@@ -1032,7 +1037,7 @@ fn register_conversion_route_for_denom(
 ) -> Result<Response, ContractError> {
     // Check if caller is the hub contract's admin
     let admin = get_hub_admin(deps.as_ref()).addr;
-    assert_ownership(info.sender.to_string(), admin.to_string())?;
+    assert_auth(info.sender.to_string(), admin.to_string())?;
 
     // Store conversion route
     let denom = denom_to_string(&denom);

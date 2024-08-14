@@ -49,6 +49,7 @@ pub struct HubConfig {
     pub trade_dispute_timer: u64,
     pub trade_limit_min: u128, // in USD
     pub trade_limit_max: u128, // in USD
+    pub source_chain: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

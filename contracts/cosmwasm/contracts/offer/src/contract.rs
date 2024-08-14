@@ -6,7 +6,7 @@ use cw2::{get_contract_version, set_contract_version};
 use localmoney_protocol::errors::ContractError;
 use localmoney_protocol::errors::ContractError::HubAlreadyRegistered;
 use localmoney_protocol::guards::{
-    assert_migration_parameters, assert_min_g_max, assert_offer_description_valid, assert_ownership,
+    assert_auth, assert_migration_parameters, assert_min_g_max, assert_offer_description_valid,
 };
 use localmoney_protocol::hub_utils::{get_hub_config, register_hub_internal};
 use localmoney_protocol::offer::{
@@ -158,7 +158,7 @@ pub fn update_offer(
     let mut offer_model = OfferModel::may_load(deps.storage, msg.id);
 
     let sender = info.sender.clone().to_string();
-    assert_ownership(sender.clone(), offer_model.offer.owner.clone().to_string())?;
+    assert_auth(sender.clone(), offer_model.offer.owner.clone().to_string())?;
 
     assert_offer_description_valid(msg.description.clone()).unwrap();
 

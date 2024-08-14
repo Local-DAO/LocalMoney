@@ -9,7 +9,7 @@ use localmoney_protocol::currencies::FiatCurrency;
 use localmoney_protocol::denom_utils::denom_to_string;
 use localmoney_protocol::errors::ContractError;
 use localmoney_protocol::errors::ContractError::HubAlreadyRegistered;
-use localmoney_protocol::guards::{assert_migration_parameters, assert_ownership};
+use localmoney_protocol::guards::{assert_auth, assert_migration_parameters};
 use localmoney_protocol::hub_utils::{get_hub_admin, get_hub_config, register_hub_internal};
 use localmoney_protocol::price::{
     CurrencyPrice, DenomFiatPrice, ExecuteMsg, PriceRoute, QueryMsg, DENOM_PRICE_ROUTE, FIAT_PRICE,
@@ -69,7 +69,7 @@ pub fn update_prices(
 ) -> Result<Response, ContractError> {
     let hub_cfg = get_hub_config(deps.as_ref());
     let sender = info.sender.clone().to_string();
-    assert_ownership(sender, hub_cfg.price_provider_addr.to_string())?;
+    assert_auth(sender, hub_cfg.price_provider_addr.to_string())?;
     let mut attrs: Vec<(&str, String)> = vec![("action", "update_prices".to_string())];
     prices.iter().for_each(|price| {
         // Load existing object or default
@@ -97,7 +97,7 @@ pub fn register_price_route_for_denom(
 ) -> Result<Response, ContractError> {
     let admin = get_hub_admin(deps.as_ref()).addr;
     let sender = info.sender.clone().to_string();
-    assert_ownership(sender, admin.to_string())?;
+    assert_auth(sender, admin.to_string())?;
 
     let denom_str = denom_to_string(&denom.clone());
     DENOM_PRICE_ROUTE
