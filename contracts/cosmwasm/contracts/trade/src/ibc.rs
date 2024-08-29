@@ -1,7 +1,8 @@
 use cosmwasm_std::{
     entry_point, from_binary, to_binary, Binary, DepsMut, Env, IbcBasicResponse, IbcChannel,
     IbcChannelCloseMsg, IbcChannelConnectMsg, IbcChannelOpenMsg, IbcChannelOpenResponse, IbcOrder,
-    IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg, IbcReceiveResponse, StdResult,
+    IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg, IbcReceiveResponse, MessageInfo,
+    StdResult,
 };
 use cw_storage_plus::Map;
 use localmoney_protocol::{errors::ContractError, guards::assert_auth, trade::NewTrade};
@@ -13,7 +14,7 @@ pub const CONNECTION_COUNTS: Map<String, u32> = Map::new("connection_counts");
 /// (channel_id) -> timeout_count. Reset on channel closure.
 pub const TIMEOUT_COUNTS: Map<String, u32> = Map::new("timeout_count");
 
-use crate::contract::_create_trade;
+use crate::contract::{_create_trade, cancel_request};
 
 const IBC_VERSION: &str = "ics";
 #[entry_point]
@@ -86,13 +87,15 @@ pub fn do_ibc_packet_receive(
 
     match msg {
         IbcExecuteMsg::Create {
-            source_address,
+            source_address: _,
             source_chain,
             new_trade,
-        } => {
-            // assert_auth(source_address, new_trade.taker.clone())?;
-            execute_create_trade(deps, env, channel, new_trade, source_chain)
-        }
+        } => execute_create_trade(deps, env, channel, new_trade, source_chain),
+        IbcExecuteMsg::CancelRequest {
+            source_address,
+            source_chain,
+            trade_id,
+        } => execute_cancel_trade(deps, env, channel, source_address, source_chain, trade_id),
     }
 }
 
@@ -197,6 +200,11 @@ pub enum IbcExecuteMsg {
         source_chain: String,
         new_trade: NewTrade,
     },
+    CancelRequest {
+        source_address: String,
+        source_chain: String,
+        trade_id: u64,
+    },
 }
 
 fn execute_create_trade(
@@ -213,4 +221,36 @@ fn execute_create_trade(
     }
     ibc_res = ibc_res.add_attribute("channel", channel);
     Ok(ibc_res)
+}
+
+fn execute_cancel_trade(
+    deps: DepsMut,
+    env: Env,
+    channel: String,
+    source_address: String,
+    _source_chain: String,
+    trade_id: u64,
+) -> Result<IbcReceiveResponse, ContractError> {
+    match cancel_request(deps, env, source_address, trade_id) {
+        Ok(response) => {
+            let mut ibc_res = IbcReceiveResponse::new()
+                .set_ack(make_ack_success())
+                .add_attribute("method", "execute_cancel_trade")
+                .add_attribute("channel", channel);
+
+            for msg in response.messages {
+                ibc_res = ibc_res.add_message(msg.msg);
+            }
+
+            for event in response.events {
+                ibc_res = ibc_res.add_event(event);
+            }
+
+            Ok(ibc_res)
+        }
+        Err(error) => Ok(IbcReceiveResponse::new()
+            .add_attribute("method", "execute_cancel_trade")
+            .add_attribute("error", error.to_string())
+            .set_ack(make_ack_fail(error.to_string()))),
+    }
 }

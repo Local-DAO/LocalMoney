@@ -84,7 +84,7 @@ pub fn execute(
         }
         ExecuteMsg::CancelRequest { trade_id } => {
             let sender = info.sender.to_string();
-            cancel_request(deps, env, info, sender, trade_id)
+            cancel_request(deps, env, sender, trade_id)
         }
         ExecuteMsg::RefundEscrow { trade_id } => {
             let sender = info.sender.to_string();
@@ -629,10 +629,9 @@ fn fiat_deposited(
     Ok(res)
 }
 
-fn cancel_request(
+pub fn cancel_request(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
     sender: String,
     trade_id: u64,
 ) -> Result<Response, ContractError> {
@@ -645,7 +644,7 @@ fn cancel_request(
     let mut allowed_states = vec![TradeState::RequestAccepted, TradeState::RequestCreated];
 
     // Only the buyer can cancel the trade if it is already funded
-    if info.sender.clone().eq(&trade.buyer.clone()) {
+    if sender.clone().eq(&trade.buyer.clone()) {
         allowed_states.push(TradeState::EscrowFunded)
     }
 

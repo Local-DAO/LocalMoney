@@ -1,5 +1,14 @@
 <script setup lang="ts">
 import { useLocalStorage } from '@vueuse/core'
+import {
+  AddGasOptions,
+  AxelarGMPRecoveryAPI,
+  AxelarQueryAPI,
+  Environment,
+  EvmChain,
+} from '@axelar-network/axelarjs-sdk'
+import { arrayify, defaultAbiCoder, hexZeroPad, hexlify, toUtf8Bytes } from 'ethers/lib/utils'
+import { ethers } from 'ethers'
 import type { Denom, OfferResponse } from '~/types/components.interface'
 import { FiatCurrency, OfferOrder, OfferType, isFiatCurrency, isOfferType } from '~/types/components.interface'
 import { useClientStore } from '~/stores/client'
@@ -8,9 +17,6 @@ import { defaultMicroDenomAvailable, denomsAvailable, displayToDenom } from '~/u
 import { fiatsAvailable } from '~/utils/fiat'
 import { checkValidOffer } from '~/utils/validations'
 import { AppEvents, trackAppEvents } from '~/analytics/analytics'
-import { AddGasOptions, AxelarGMPRecoveryAPI, AxelarQueryAPI, Environment, EvmChain } from '@axelar-network/axelarjs-sdk'
-import { defaultAbiCoder, arrayify, hexZeroPad, hexlify, toUtf8Bytes } from 'ethers/lib/utils'
-import { ethers } from 'ethers'
 
 const client = useClientStore()
 const route = useRoute()
@@ -90,20 +96,33 @@ onMounted(async () => {
   await fetchOffers()
   // Estimate AxelarGateway fees
   const axlApi = new AxelarQueryAPI({
-    environment: Environment.MAINNET
+    environment: Environment.MAINNET,
   })
-  
+
   const sourceChainId = 'avalanche'
   const destinationChainId = 'terra'
   const gasLimit = 3700000
   axlApi.estimateGasFee(sourceChainId, destinationChainId, gasLimit).then((res) => {
     console.log('AxelarGateway fees', res)
   })
-  const contractCallParams = {"create":{"offer_id":6,"amount":"210000000","taker":"0x6d16709103235a95Dd314DaFaD37E6594298BD52","profile_taker_contact":"WUmDNsy4+LITT25RBzKxfVy3zaQIvrhIfWvP30Bng2xo4ylu2F5YwgqfUIpG41yA14WZhCMVvdFJnkjbxiRuxaBkmcB7b1xlNqKB1at99HbHwB1kO7e9Aer6c1KPP9VciTzg5w+TPlO8GyaDFbUzuHyOOU2++QEpB66NmudY/dSIN4y1MEkJFTGBwCMu9uq7tImcyI8Pazkyq3VEdCL6vOMThYUqBLzNL+aCMHAyJ0yndE7RTZT4YkG7cqKY9yAvRK7oehzicvNjAEKlOyVeNKtruP1yoAByrO/PiRqMtsWRZ7kXXlXUcMXrWDKRkrY5HoCFn4/gDiQ7D+2DPex3oA==","taker_contact":"ZWcdq2GFr7EC+pxs7DL6vHgLHwvVby4oe4nxSSqXZq3bSel5jHFMxeSfoT9JnYdASwWdn0bEsxqElbgRvpjYHSZxBrGV+R6fVaWhvYSyXcH70b6uT8q2ao5LnAVeXeSEsBOJJT9dceF1ghaGIeXTaxBjBt+7cS0t526ad/D23/iGpCeaPq2M/s4t0E4OTXYlrzbS1T0dUIXTGHnwstNUEAHGe+g9qoSqCesn9675UQEeyD4p1BnJy6rW3j9kzQTGNoJa46sttUlk9N2m3Es7aK5g8hqp87/QNp2/3eeW0zyB0aKcFoj4J2DOKCp5se4OWNcPF2XYKxYRUzmx15TBAw==","profile_taker_encryption_key":"MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqH3WvZyV55VoVC8ToaApn16tJ4QxAib4ujgbP2fsP7v4+4Y3QvIjIcrABjJC0V/l46g55iQgUwAz96gctqOsrm0fVyYmKRw9HmJMRi8qZwuNkmPX0aFTiUTAsExPVESBRqrb4cRB9yrrQmV45TPxT4P/3pgmeaQRHTKLq431zMQLV3j9SdLT3T3TdWasOwlQBVrQmdkey95NwTlxkDbt/whDshSTphXj+tsBQVMnXvSYEzMYqJUaueXPTfbluQ4SdydP7c0gbYw5Q+6Ngmkf9Os5AZ7X9K4ZmQGqqlXfX3CweS9+fbkB+rYSwYIDIVPIBKxbe5B0OwqbuveVxwnDswIDAQAB"}} 
+  // const contractCallParams = {
+  //   create: {
+  //     offer_id: 6,
+  //     amount: '210000000',
+  //     taker: '0x6d16709103235a95Dd314DaFaD37E6594298BD52',
+  //     profile_taker_contact:
+  //       'WUmDNsy4+LITT25RBzKxfVy3zaQIvrhIfWvP30Bng2xo4ylu2F5YwgqfUIpG41yA14WZhCMVvdFJnkjbxiRuxaBkmcB7b1xlNqKB1at99HbHwB1kO7e9Aer6c1KPP9VciTzg5w+TPlO8GyaDFbUzuHyOOU2++QEpB66NmudY/dSIN4y1MEkJFTGBwCMu9uq7tImcyI8Pazkyq3VEdCL6vOMThYUqBLzNL+aCMHAyJ0yndE7RTZT4YkG7cqKY9yAvRK7oehzicvNjAEKlOyVeNKtruP1yoAByrO/PiRqMtsWRZ7kXXlXUcMXrWDKRkrY5HoCFn4/gDiQ7D+2DPex3oA==',
+  //     taker_contact:
+  //       'ZWcdq2GFr7EC+pxs7DL6vHgLHwvVby4oe4nxSSqXZq3bSel5jHFMxeSfoT9JnYdASwWdn0bEsxqElbgRvpjYHSZxBrGV+R6fVaWhvYSyXcH70b6uT8q2ao5LnAVeXeSEsBOJJT9dceF1ghaGIeXTaxBjBt+7cS0t526ad/D23/iGpCeaPq2M/s4t0E4OTXYlrzbS1T0dUIXTGHnwstNUEAHGe+g9qoSqCesn9675UQEeyD4p1BnJy6rW3j9kzQTGNoJa46sttUlk9N2m3Es7aK5g8hqp87/QNp2/3eeW0zyB0aKcFoj4J2DOKCp5se4OWNcPF2XYKxYRUzmx15TBAw==',
+  //     profile_taker_encryption_key:
+  //       'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqH3WvZyV55VoVC8ToaApn16tJ4QxAib4ujgbP2fsP7v4+4Y3QvIjIcrABjJC0V/l46g55iQgUwAz96gctqOsrm0fVyYmKRw9HmJMRi8qZwuNkmPX0aFTiUTAsExPVESBRqrb4cRB9yrrQmV45TPxT4P/3pgmeaQRHTKLq431zMQLV3j9SdLT3T3TdWasOwlQBVrQmdkey95NwTlxkDbt/whDshSTphXj+tsBQVMnXvSYEzMYqJUaueXPTfbluQ4SdydP7c0gbYw5Q+6Ngmkf9Os5AZ7X9K4ZmQGqqlXfX3CweS9+fbkB+rYSwYIDIVPIBKxbe5B0OwqbuveVxwnDswIDAQAB',
+  //   },
+  // }
+  const contractCallParams = { cancel_request: { trade_id: 5 } }
   const newTradeString = JSON.stringify(contractCallParams)
   const payload = toUtf8Bytes(newTradeString)
   const versionPrefix = arrayify(hexZeroPad(hexlify(2), 4))
-  const versionedPayload = concatenate([ versionPrefix, payload ])
+  const versionedPayload = concatenate([versionPrefix, payload])
   console.log('versionedPayload', uint8ArrayToHex(versionedPayload))
   // Recovery API - Add native gas to a transaction
   /*
@@ -123,26 +142,23 @@ onMounted(async () => {
  * @returns {Uint8Array}
  */
 function concatenate(uint8arrays: Uint8Array[]): Uint8Array {
-  const totalLength = uint8arrays.reduce(
-    (total, uint8array) => total + uint8array.byteLength,
-    0
-  );
+  const totalLength = uint8arrays.reduce((total, uint8array) => total + uint8array.byteLength, 0)
 
-  const result = new Uint8Array(totalLength);
+  const result = new Uint8Array(totalLength)
 
-  let offset = 0;
+  let offset = 0
   uint8arrays.forEach((uint8array) => {
-    result.set(uint8array, offset);
-    offset += uint8array.byteLength;
-  });
+    result.set(uint8array, offset)
+    offset += uint8array.byteLength
+  })
 
-  return result;
+  return result
 }
 
 function uint8ArrayToHex(uint8array: Uint8Array): string {
-  return '0x' + Array.from(uint8array)
+  return `0x${Array.from(uint8array)
     .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
+    .join('')}`
 }
 
 watch(selectedFiat, async () => {
