@@ -13,10 +13,10 @@ const userWallet = computed(() => client.userWallet)
 watch(userWallet, async (wallet) => {
   if (wallet.isConnected) {
     await notification.register()
-    trackWalletConnection(WalletEvents.connected, wallet.address)
+    // trackWalletConnection(WalletEvents.connected, wallet.address)
   } else {
     await notification.unregister()
-    trackWalletConnection(WalletEvents.disconnected)
+    // trackWalletConnection(WalletEvents.disconnected)
   }
 })
 

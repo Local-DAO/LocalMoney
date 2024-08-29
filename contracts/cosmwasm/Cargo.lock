@@ -860,7 +860,7 @@ dependencies = [
 
 [[package]]
 name = "localmoney-protocol"
-version = "1.0.0"
+version = "1.1.1"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -1628,7 +1628,7 @@ dependencies = [
 
 [[package]]
 name = "trade"
-version = "0.0.0"
+version = "1.1.2"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",

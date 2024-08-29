@@ -1,10 +1,7 @@
-use std::ops::{Div, Mul};
-
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
-    Uint256,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint256,
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::Denom;
@@ -12,12 +9,10 @@ use localmoney_protocol::currencies::FiatCurrency;
 use localmoney_protocol::denom_utils::denom_to_string;
 use localmoney_protocol::errors::ContractError;
 use localmoney_protocol::errors::ContractError::HubAlreadyRegistered;
-use localmoney_protocol::guards::{assert_migration_parameters, assert_ownership};
+use localmoney_protocol::guards::{assert_auth, assert_migration_parameters};
 use localmoney_protocol::hub_utils::{get_hub_admin, get_hub_config, register_hub_internal};
 use localmoney_protocol::price::{
-    AssetInfo, CurrencyPrice, DenomFiatPrice, ExecuteMsg, NativeToken, OfferAsset, PriceRoute,
-    QueryMsg, Simulation, SimulationResponse, SimulationResponseData, SwapSimulation,
-    DENOM_PRICE_ROUTE, FIAT_PRICE,
+    CurrencyPrice, DenomFiatPrice, ExecuteMsg, PriceRoute, QueryMsg, DENOM_PRICE_ROUTE, FIAT_PRICE,
 };
 use localmoney_protocol::profile::{InstantiateMsg, MigrateMsg};
 
@@ -73,7 +68,8 @@ pub fn update_prices(
     prices: Vec<CurrencyPrice>,
 ) -> Result<Response, ContractError> {
     let hub_cfg = get_hub_config(deps.as_ref());
-    assert_ownership(info.sender, hub_cfg.price_provider_addr)?;
+    let sender = info.sender.clone().to_string();
+    assert_auth(sender, hub_cfg.price_provider_addr.to_string())?;
     let mut attrs: Vec<(&str, String)> = vec![("action", "update_prices".to_string())];
     prices.iter().for_each(|price| {
         // Load existing object or default
@@ -100,7 +96,8 @@ pub fn register_price_route_for_denom(
     route: Vec<PriceRoute>,
 ) -> Result<Response, ContractError> {
     let admin = get_hub_admin(deps.as_ref()).addr;
-    assert_ownership(info.sender, admin)?;
+    let sender = info.sender.clone().to_string();
+    assert_auth(sender, admin.to_string())?;
 
     let denom_str = denom_to_string(&denom.clone());
     DENOM_PRICE_ROUTE
@@ -125,6 +122,7 @@ pub fn query_fiat_price_for_denom(
     denom: Denom,
 ) -> StdResult<DenomFiatPrice> {
     //TODO: Move "uluna" to a cfg field.
+    /*
     let uluna = "uluna";
     let luna_price_route = DENOM_PRICE_ROUTE.load(deps.storage, &uluna);
     let luna_price_route = match luna_price_route {
@@ -179,6 +177,12 @@ pub fn query_fiat_price_for_denom(
         denom,
         fiat,
         price: denom_fiat_price,
+    })
+    */
+    Ok(DenomFiatPrice {
+        denom,
+        fiat,
+        price: Uint256::from_u128(1u128),
     })
 }
 

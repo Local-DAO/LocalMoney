@@ -8,9 +8,7 @@ import * as fs from "fs";
 import findFilesInDir from "./findFilesInDir.js";
 
 let rpcEndpoint = "http://localhost:26657";
-let seed =
-  "clip hire initial neck maid actor venue client foam budget lock catalog sweet steak waste crater broccoli pipe steak sister coyote moment obvious choose";
-
+let seed = "";
 if (process.env.ADMIN_SEED) {
   seed = process.env.ADMIN_SEED;
 }

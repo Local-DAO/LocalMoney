@@ -2,8 +2,8 @@ use std::fmt::{self, Display};
 use std::ops::{Add, Mul};
 
 use cosmwasm_std::{
-    Addr, BlockInfo, Coin, CustomQuery, Decimal, Deps, Env, MessageInfo, Order, StdResult, Storage,
-    Uint128, Uint256,
+    Addr, BlockInfo, Coin, CustomQuery, Decimal, Deps, Env, Order, StdResult, Storage, Uint128,
+    Uint256,
 };
 use cw20::Denom;
 use cw_storage_plus::{Bound, Index, IndexList, IndexedMap, Item, Map, MultiIndex, UniqueIndex};
@@ -63,7 +63,7 @@ pub enum ExecuteMsg {
     },
     SettleDispute {
         trade_id: u64,
-        winner: Addr,
+        winner: String,
     },
     RegisterHub {},
     RegisterConversionRouteForDenom {
@@ -150,7 +150,7 @@ pub enum TraderRole {
 pub struct NewTrade {
     pub offer_id: u64,
     pub amount: Uint128,
-    pub taker: Addr,
+    pub taker: String,
     pub profile_taker_contact: String,
     pub profile_taker_encryption_key: String,
     pub taker_contact: String,
@@ -192,10 +192,9 @@ impl fmt::Display for TradeState {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Trade {
     pub id: u64,
-    pub addr: Addr,
-    pub buyer: Addr,
+    pub buyer: String,
     pub buyer_contact: Option<String>,
-    pub seller: Addr,
+    pub seller: String,
     pub seller_contact: Option<String>,
     pub arbitrator: Addr,
     pub arbitrator_buyer_contact: Option<String>,
@@ -210,15 +209,15 @@ pub struct Trade {
     pub fiat: FiatCurrency,
     pub denom_fiat_price: Uint256,
     pub state_history: Vec<TradeStateItem>,
+    pub source_chain: String,
     state: TradeState,
 }
 
 impl Trade {
     pub fn new(
         id: u64,
-        addr: Addr,
-        buyer: Addr,
-        seller: Addr,
+        buyer: String,
+        seller: String,
         seller_contact: Option<String>,
         buyer_contact: Option<String>,
         arbitrator: Addr,
@@ -230,11 +229,11 @@ impl Trade {
         amount: Uint128,
         fiat: FiatCurrency,
         denom_fiat_price: Uint256,
+        source_chain: String,
         state_history: Vec<TradeStateItem>,
     ) -> Trade {
         return Trade {
             id,
-            addr,
             buyer,
             seller,
             seller_contact,
@@ -252,6 +251,7 @@ impl Trade {
             fiat,
             denom_fiat_price,
             state_history,
+            source_chain,
             state: TradeState::RequestCreated,
         };
     }
@@ -264,7 +264,7 @@ impl Trade {
         return self.expires_at.ne(&0) && block_time > self.expires_at;
     }
 
-    pub fn set_state(&mut self, new_state: TradeState, env: &Env, info: &MessageInfo) {
+    pub fn set_state(&mut self, new_state: TradeState, env: &Env, sender: &String) {
         // if the escrow is canceled or fiat is already deposited, the trade can no longer expire
         if vec![
             TradeState::RequestCanceled,
@@ -279,7 +279,7 @@ impl Trade {
         let block: BlockInfo = env.block.clone();
         self.state = new_state;
         let new_trade_state = TradeStateItem {
-            actor: info.sender.clone(),
+            actor: sender.clone(),
             state: self.get_state(),
             timestamp: block.time.seconds(),
         };
@@ -290,11 +290,10 @@ impl Trade {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct TradeResponse {
     pub id: u64,
-    pub addr: Addr,
-    pub buyer: Addr,
+    pub buyer: String,
     pub buyer_contact: Option<String>,
     pub buyer_encryption_key: Option<String>,
-    pub seller: Addr,
+    pub seller: String,
     pub seller_contact: Option<String>,
     pub seller_encryption_key: Option<String>,
     pub arbitrator: Option<Addr>,
@@ -347,7 +346,6 @@ impl TradeResponse {
 
         TradeResponse {
             id: trade.id,
-            addr: trade.addr,
             buyer: trade.buyer,
             buyer_contact: trade.buyer_contact,
             buyer_encryption_key: buyer_profile.encryption_key,
@@ -375,7 +373,7 @@ impl TradeResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct TradeStateItem {
-    pub actor: Addr,
+    pub actor: String,
     pub state: TradeState,
     pub timestamp: u64,
 }

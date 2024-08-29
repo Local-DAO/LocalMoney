@@ -19,6 +19,12 @@
       "display": "LUNA"
     }
   },
+  "neutron": {
+    "untrn": {
+      "icon": "/tokens/luna.png",
+      "display": "UNTRN"
+    }
+  },
   "kujira_testnet": {
     "ukuji": {
       "icon": "/tokens/kuji.png",

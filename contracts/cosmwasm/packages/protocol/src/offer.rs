@@ -196,7 +196,7 @@ impl OfferModel<'_> {
                     let profile = load_profile(
                         &deps.querier,
                         hub_config.profile_addr.to_string(),
-                        offer.clone().owner,
+                        offer.clone().owner.to_string(),
                     )
                     .unwrap();
                     Ok(OfferResponse { offer, profile })
@@ -253,7 +253,7 @@ impl OfferModel<'_> {
                         let new_profile = load_profile(
                             &deps.querier,
                             hub_config.profile_addr.to_string(),
-                            offer.owner.clone(),
+                            offer.owner.clone().to_string(),
                         )
                         .unwrap();
                         profiles.push(new_profile.clone());

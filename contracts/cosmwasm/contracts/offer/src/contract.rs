@@ -6,7 +6,7 @@ use cw2::{get_contract_version, set_contract_version};
 use localmoney_protocol::errors::ContractError;
 use localmoney_protocol::errors::ContractError::HubAlreadyRegistered;
 use localmoney_protocol::guards::{
-    assert_migration_parameters, assert_min_g_max, assert_offer_description_valid, assert_ownership,
+    assert_auth, assert_migration_parameters, assert_min_g_max, assert_offer_description_valid,
 };
 use localmoney_protocol::hub_utils::{get_hub_config, register_hub_internal};
 use localmoney_protocol::offer::{
@@ -98,7 +98,7 @@ pub fn create_offer(
     // Update profile contact info
     let update_profile_contact_msg = update_profile_contact_msg(
         hub_config.profile_addr.to_string(),
-        info.sender.clone(),
+        info.sender.clone().to_string(),
         msg.owner_contact.clone(),
         msg.owner_encryption_key.clone(),
     );
@@ -157,7 +157,8 @@ pub fn update_offer(
     let hub_config = get_hub_config(deps.as_ref());
     let mut offer_model = OfferModel::may_load(deps.storage, msg.id);
 
-    assert_ownership(info.sender.clone(), offer_model.offer.owner.clone())?;
+    let sender = info.sender.clone().to_string();
+    assert_auth(sender.clone(), offer_model.offer.owner.clone().to_string())?;
 
     assert_offer_description_valid(msg.description.clone()).unwrap();
 
@@ -165,7 +166,7 @@ pub fn update_offer(
     if msg.owner_contact.is_some() && msg.owner_encryption_key.is_some() {
         sub_msgs.push(update_profile_contact_msg(
             hub_config.profile_addr.to_string(),
-            info.sender.clone(),
+            sender.clone(),
             msg.owner_contact.clone().unwrap(),
             msg.owner_encryption_key.clone().unwrap(),
         ));
@@ -207,7 +208,7 @@ pub fn load_offer_by_id(deps: Deps, id: u64) -> StdResult<OfferResponse> {
     let profile = load_profile(
         &deps.querier,
         hub_config.profile_addr.to_string(),
-        offer.owner.clone(),
+        offer.owner.clone().to_string(),
     )
     .unwrap();
     Ok(OfferResponse { offer, profile })

@@ -1,6 +1,6 @@
 [package]
 name = "localmoney-protocol"
-version = "1.0.0"
+version = "1.1.1"
 authors = ["LocalMoney Developers"]
 edition = "2018"
 description = "Common helpers for localmoney-protocol"

@@ -11,7 +11,7 @@ if (!window) {
 }
 
 export class TestCosmosChain extends CosmosChain {
-  public seed = ''
+  public seed = process.env.ADMIN_SEED!
 
   async connectWallet(): Promise<void> {
     this.signer = await DirectSecp256k1HdWallet.fromMnemonic(this.seed, { prefix: process.env.ADDR_PREFIX })
@@ -20,7 +20,7 @@ export class TestCosmosChain extends CosmosChain {
     this.account = accounts[0]
     this.cwClient = await SigningCosmWasmClient.connectWithSigner(this.config.rpcUrl, this.signer, {
       gasPrice: {
-        amount: Decimal.fromUserInput('0.0025', 100),
+        amount: Decimal.fromUserInput(process.env.GAS_PRICE, 100),
         denom: this.config.coinMinimalDenom,
       },
     })

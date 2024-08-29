@@ -61,8 +61,8 @@ fn update_config(
     let admin = ADMIN.load(deps.storage).unwrap();
     if !info.sender.eq(&admin.addr) {
         return Err(Unauthorized {
-            owner: admin.addr.clone(),
-            caller: info.sender.clone(),
+            owner: admin.addr.clone().to_string(),
+            caller: info.sender.clone().to_string(),
         });
     }
 
@@ -153,8 +153,8 @@ fn update_admin(
     let mut admin = ADMIN.load(deps.storage).unwrap();
     if !info.sender.eq(&admin.addr) {
         return Err(Unauthorized {
-            owner: admin.addr.clone(),
-            caller: info.sender.clone(),
+            owner: admin.addr.clone().to_string(),
+            caller: info.sender.clone().to_string(),
         });
     }
 

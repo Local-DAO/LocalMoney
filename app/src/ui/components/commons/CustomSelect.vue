@@ -21,8 +21,9 @@ const emit = defineEmits<{
   >
     <template #selected-option>
       <div class="wrap" v-bind="(info = getSelectInfo(options, modelValue))">
-        <img v-if="info.icon" :src="info.icon" />
-        <p>{{ info.display }}</p>
+        <!-- <img v-if="info.icon" :src="info.icon" /> -->
+        <!-- <p>{{ info.display }}</p> -->
+        <p>{{  info }}</p>
       </div>
     </template>
     <template #option="{ label }">
