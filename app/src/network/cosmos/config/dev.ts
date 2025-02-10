@@ -7,7 +7,7 @@ export const DEV_CONFIG: CosmosConfig = {
   rpcUrl: process.env.RPC ?? '',
   addressPrefix: 'kujira',
   coinDenom: 'KUJI',
-  coinMinimalDenom: 'ukuji',
+  coinMinimalDenom: 'untrn',
   coinDecimals: 6,
 }
 

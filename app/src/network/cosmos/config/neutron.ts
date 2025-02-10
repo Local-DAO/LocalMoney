@@ -6,8 +6,8 @@ export const NEUTRON_CONFIG: CosmosConfig = {
   lcdUrl: 'https://neutron-lcd.publicnode.com/',
   rpcUrl: 'https://neutron-rpc.publicnode.com/',
   addressPrefix: 'neutron',
-  coinDenom: '',
-  coinMinimalDenom: '',
+  coinDenom: 'ntrn',
+  coinMinimalDenom: 'untrn',
   coinDecimals: 6,
 }
 

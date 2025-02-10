@@ -8,7 +8,7 @@
       "icon": "/tokens/usk.png",
       "display": "USK"
     },
-    "ukuji": {
+    "untrn": {
       "icon": "/tokens/kuji.png",
       "display": "KUJI"
     }
@@ -20,7 +20,7 @@
     }
   },
   "kujira_testnet": {
-    "ukuji": {
+    "untrn": {
       "icon": "/tokens/kuji.png",
       "display": "KUJI"
     },

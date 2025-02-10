@@ -20,7 +20,7 @@ export class TestCosmosChain extends CosmosChain {
     this.account = accounts[0]
     this.cwClient = await SigningCosmWasmClient.connectWithSigner(this.config.rpcUrl, this.signer, {
       gasPrice: {
-        amount: Decimal.fromUserInput('0.0025', 100),
+        amount: Decimal.fromUserInput(parseFloat(process.env.GAS_PRICE || '0.053untrn').toString(), 100),
         denom: this.config.coinMinimalDenom,
       },
     })
