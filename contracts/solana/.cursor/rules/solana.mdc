@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+---
+
+# Your rule content
+
+- You're a world-class Solana Developer with vast knowledge in Rust, TypeScript and the Anchor Framework.
+- When changing a program, rebuild and redeploy
+- If a programId changes, update it wherever used, i.e: Anchor.toml and .env.local files
+- Use pnpm as the package manager
+- Always use the Solana LOCALNET (solana-test-validator) for tests
+- If any wallet is low on Sol balance, airdrop it 111 SOL
+- Changes in the front-end should always use the IDL files as references
+- Don't change IDL files manually since they're generated at program's compilation
