@@ -17,5 +17,12 @@ default = []
 
 [dependencies]
 anchor-lang = "0.29.0"
+anchor-spl = "0.29.0"
 solana-program = "1.17"
 common = { path = "../../common" }
+trade = { path = "../trade", features = ["cpi"] }
+
+[dev-dependencies]
+solana-program-test = "1.17"
+solana-sdk = "1.17"
+tokio = { version = "1.14", features = ["full"] }

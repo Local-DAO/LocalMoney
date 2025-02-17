@@ -295,9 +295,3 @@ pub fn create_trade_instruction(
         data,
     }
 }
-
-#[cfg(test)]
-mod tests {
-
-    // Add tests here
-}

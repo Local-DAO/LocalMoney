@@ -1,4 +1,6 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Token, TokenAccount};
+use solana_program::instruction::AccountMeta;
 
 declare_id!("Gpy5ATEJY5YawGqJhBd1Xcd59NZW547tCjH9d8s2B1vp");
 
@@ -114,10 +116,45 @@ pub mod offer {
             OfferError::InvalidAmount
         );
 
-        // Here we would create a new trade using the trade program via CPI
-        // This would involve a CPI call to the trade program
+        // Calculate total price for the trade
+        let total_price = amount
+            .checked_mul(offer.price_per_token)
+            .ok_or(OfferError::CalculationError)?;
 
-        msg!("Offer taken successfully");
+        // Prepare accounts for CPI call
+        let accounts = vec![
+            AccountMeta::new(ctx.accounts.trade.key(), false),
+            AccountMeta::new(ctx.accounts.offer.creator, true),
+            AccountMeta::new_readonly(ctx.accounts.token_mint.key(), false),
+            AccountMeta::new(ctx.accounts.seller_token_account.key(), false),
+            AccountMeta::new(ctx.accounts.escrow_account.key(), false),
+            AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
+            AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
+        ];
+
+        // Create the trade instruction
+        let ix = trade::create_trade_instruction(
+            &ctx.accounts.trade_program.key(),
+            &accounts,
+            amount,
+            total_price,
+        );
+
+        // Invoke the trade program
+        solana_program::program::invoke(
+            &ix,
+            &[
+                ctx.accounts.trade.to_account_info(),
+                ctx.accounts.offer.to_account_info(),
+                ctx.accounts.token_mint.to_account_info(),
+                ctx.accounts.seller_token_account.to_account_info(),
+                ctx.accounts.escrow_account.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
+        msg!("Offer taken successfully and trade created");
         Ok(())
     }
 }
@@ -151,8 +188,23 @@ pub struct OfferStatusUpdate<'info> {
 pub struct TakeOffer<'info> {
     #[account(mut)]
     pub offer: Account<'info, Offer>,
+    #[account(mut)]
     pub taker: Signer<'info>,
-    pub trade_program: Program<'info, System>, // Replace with actual trade program type
+    /// CHECK: Validated in CPI call to trade program
+    pub trade: UncheckedAccount<'info>,
+    pub token_mint: Box<Account<'info, token::Mint>>,
+    #[account(
+        mut,
+        constraint = seller_token_account.mint == token_mint.key(),
+        constraint = seller_token_account.owner == offer.creator
+    )]
+    pub seller_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub escrow_account: Box<Account<'info, TokenAccount>>,
+    pub token_program: Program<'info, Token>,
+    /// CHECK: Validated in CPI call
+    pub trade_program: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[account]
@@ -183,10 +235,105 @@ pub enum OfferError {
     InvalidAmount,
     #[msg("Invalid amount configuration")]
     InvalidAmounts,
+    #[msg("Error in price calculation")]
+    CalculationError,
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use anchor_lang::{system_program, InstructionData};
+    use solana_program_test::*;
+    use solana_sdk::{
+        account::Account as SolanaAccount,
+        instruction::{AccountMeta, Instruction},
+        signature::Keypair,
+        signer::Signer,
+        transaction::Transaction,
+    };
 
-    // Add tests here
+    #[tokio::test]
+    async fn test_offer_flow() {
+        // Initialize program test environment
+        let mut program_test = ProgramTest::new("offer", crate::ID, None);
+
+        // Generate necessary keypairs
+        let creator = Keypair::new();
+        let taker = Keypair::new();
+        let offer = Keypair::new();
+        let token_mint = Keypair::new();
+
+        // Add accounts with some SOL
+        program_test.add_account(
+            creator.pubkey(),
+            SolanaAccount {
+                lamports: 1_000_000_000,
+                data: vec![],
+                owner: system_program::ID,
+                executable: false,
+                rent_epoch: 0,
+            },
+        );
+
+        program_test.add_account(
+            taker.pubkey(),
+            SolanaAccount {
+                lamports: 1_000_000_000,
+                data: vec![],
+                owner: system_program::ID,
+                executable: false,
+                rent_epoch: 0,
+            },
+        );
+
+        // Start the test environment
+        let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
+
+        // Create the CreateOffer instruction
+        let mut instruction_data = vec![0u8]; // CreateOffer discriminator
+        instruction_data.extend_from_slice(&1000u64.to_le_bytes()); // amount
+        instruction_data.extend_from_slice(&100_000u64.to_le_bytes()); // price_per_token
+        instruction_data.extend_from_slice(&100u64.to_le_bytes()); // min_amount
+        instruction_data.extend_from_slice(&1000u64.to_le_bytes()); // max_amount
+
+        let ix = Instruction {
+            program_id: crate::ID,
+            accounts: vec![
+                AccountMeta::new(offer.pubkey(), false),
+                AccountMeta::new(creator.pubkey(), true),
+                AccountMeta::new_readonly(token_mint.pubkey(), false),
+                AccountMeta::new_readonly(system_program::ID, false),
+            ],
+            data: instruction_data,
+        };
+
+        let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
+        transaction.sign(&[&payer, &creator, &offer], recent_blockhash);
+
+        banks_client.process_transaction(transaction).await.unwrap();
+
+        // Verify offer was created
+        let offer_account = banks_client
+            .get_account(offer.pubkey())
+            .await
+            .unwrap()
+            .unwrap();
+        let offer_data = Offer::try_deserialize(&mut offer_account.data.as_ref()).unwrap();
+        assert_eq!(offer_data.creator, creator.pubkey());
+        assert_eq!(offer_data.token_mint, token_mint.pubkey());
+        assert_eq!(offer_data.amount, 1000);
+        assert_eq!(offer_data.price_per_token, 100_000);
+        assert_eq!(offer_data.status, OfferStatus::Active);
+
+        // Note: A complete test would need to:
+        // 1. Initialize the token mint
+        // 2. Create token accounts for seller and escrow
+        // 3. Mint tokens to seller's account
+        // 4. Set up proper token account authorities
+        // 5. Create a proper trade account
+        //
+        // For now, we've verified the basic offer creation flow
+        // The take_offer functionality would need a more complete token setup
+        // to test properly
+    }
 }
