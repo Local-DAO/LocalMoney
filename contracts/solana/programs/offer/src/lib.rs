@@ -12,7 +12,6 @@ pub mod offer {
         price_per_token: u64,
         min_amount: u64,
         max_amount: u64,
-        payment_method: PaymentMethod,
     ) -> Result<()> {
         require!(
             min_amount <= max_amount && max_amount <= amount,
@@ -26,7 +25,6 @@ pub mod offer {
         offer.price_per_token = price_per_token;
         offer.min_amount = min_amount;
         offer.max_amount = max_amount;
-        offer.payment_method = payment_method;
         offer.status = OfferStatus::Active;
         offer.created_at = Clock::get()?.unix_timestamp;
         offer.updated_at = Clock::get()?.unix_timestamp;
@@ -40,7 +38,6 @@ pub mod offer {
         price_per_token: Option<u64>,
         min_amount: Option<u64>,
         max_amount: Option<u64>,
-        payment_method: Option<PaymentMethod>,
     ) -> Result<()> {
         let offer = &mut ctx.accounts.offer;
 
@@ -56,10 +53,6 @@ pub mod offer {
             offer.max_amount = new_max;
         }
 
-        if let Some(new_payment_method) = payment_method {
-            offer.payment_method = new_payment_method;
-        }
-
         // Validate amounts after update
         require!(
             offer.min_amount <= offer.max_amount && offer.max_amount <= offer.amount,
@@ -73,7 +66,10 @@ pub mod offer {
 
     pub fn pause_offer(ctx: Context<OfferStatusUpdate>) -> Result<()> {
         let offer = &mut ctx.accounts.offer;
-        require!(offer.status == OfferStatus::Active, OfferError::InvalidStatus);
+        require!(
+            offer.status == OfferStatus::Active,
+            OfferError::InvalidStatus
+        );
 
         offer.status = OfferStatus::Paused;
         offer.updated_at = Clock::get()?.unix_timestamp;
@@ -83,7 +79,10 @@ pub mod offer {
 
     pub fn resume_offer(ctx: Context<OfferStatusUpdate>) -> Result<()> {
         let offer = &mut ctx.accounts.offer;
-        require!(offer.status == OfferStatus::Paused, OfferError::InvalidStatus);
+        require!(
+            offer.status == OfferStatus::Paused,
+            OfferError::InvalidStatus
+        );
 
         offer.status = OfferStatus::Active;
         offer.updated_at = Clock::get()?.unix_timestamp;
@@ -106,7 +105,10 @@ pub mod offer {
 
     pub fn take_offer(ctx: Context<TakeOffer>, amount: u64) -> Result<()> {
         let offer = &ctx.accounts.offer;
-        require!(offer.status == OfferStatus::Active, OfferError::InvalidStatus);
+        require!(
+            offer.status == OfferStatus::Active,
+            OfferError::InvalidStatus
+        );
         require!(
             amount >= offer.min_amount && amount <= offer.max_amount,
             OfferError::InvalidAmount
@@ -161,26 +163,9 @@ pub struct Offer {
     pub price_per_token: u64,
     pub min_amount: u64,
     pub max_amount: u64,
-    pub payment_method: PaymentMethod,
     pub status: OfferStatus,
     pub created_at: i64,
     pub updated_at: i64,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
-pub enum PaymentMethod {
-    BankTransfer {
-        bank_name: String,
-        account_info: String,
-    },
-    MobileMoney {
-        provider: String,
-        phone_number: String,
-    },
-    Other {
-        name: String,
-        details: String,
-    },
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
@@ -202,6 +187,6 @@ pub enum OfferError {
 
 #[cfg(test)]
 mod tests {
-    
+
     // Add tests here
 }

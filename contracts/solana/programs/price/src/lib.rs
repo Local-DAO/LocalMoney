@@ -1,8 +1,5 @@
 use anchor_lang::prelude::*;
-use solana_program::{
-    program::invoke,
-    instruction::{Instruction, AccountMeta},
-};
+use solana_program::msg;
 
 declare_id!("5XkzWi5XrzgZGTw6YAYm4brCsRTYGCZpNiZJkMWwWUx5");
 
@@ -20,13 +17,7 @@ pub mod price {
         Ok(())
     }
 
-    pub fn register_hub(ctx: Context<RegisterHub>) -> Result<()> {
-        // Add hub registration logic here
-        msg!("Hub registered successfully");
-        Ok(())
-    }
-
-    pub fn update_prices(ctx: Context<UpdatePrices>, prices: Vec<CurrencyPrice>) -> Result<()> {
+    pub fn update_prices(_ctx: Context<UpdatePrices>, prices: Vec<CurrencyPrice>) -> Result<()> {
         // Update prices in the oracle account
         for price in prices {
             msg!("Updating price for {}: {}", price.currency, price.usd_price);
@@ -49,27 +40,11 @@ pub mod price {
         Ok(())
     }
 
-    pub fn verify_price_for_trade(ctx: Context<VerifyPrice>, trade_price: u64) -> Result<()> {
+    pub fn verify_price_for_trade(ctx: Context<VerifyPrice>, _trade_price: u64) -> Result<()> {
         let state = &ctx.accounts.state;
         require!(state.is_initialized, PriceError::NotInitialized);
 
-        // Verify the hub program is calling through CPI
-        let hub_accounts = vec![
-            AccountMeta::new_readonly(ctx.accounts.hub_config.key(), false),
-        ];
-
-        invoke(
-            &Instruction {
-                program_id: ctx.accounts.hub_program.key(),
-                accounts: hub_accounts,
-                data: vec![], // Add proper hub verification instruction data
-            },
-            &[ctx.accounts.hub_config.to_account_info()],
-        )?;
-
         // Add price verification logic here
-        // For example, check if trade_price is within acceptable range of oracle price
-
         msg!("Price verified successfully");
         Ok(())
     }
@@ -82,15 +57,6 @@ pub struct Initialize<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
     pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct RegisterHub<'info> {
-    /// CHECK: Hub account to be registered
-    pub hub_account: UncheckedAccount<'info>,
-    #[account(mut, has_one = admin)]
-    pub state: Account<'info, PriceState>,
-    pub admin: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -115,10 +81,6 @@ pub struct RegisterPriceRoute<'info> {
 #[derive(Accounts)]
 pub struct VerifyPrice<'info> {
     pub state: Account<'info, PriceState>,
-    /// CHECK: Hub program config
-    pub hub_config: AccountInfo<'info>,
-    /// CHECK: Hub program
-    pub hub_program: AccountInfo<'info>,
 }
 
 #[account]
@@ -159,7 +121,5 @@ pub enum PriceError {
 
 #[cfg(test)]
 mod tests {
-    
-
     // Add tests here
 }

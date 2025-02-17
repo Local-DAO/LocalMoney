@@ -1,11 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "programs/hub",
-    "programs/trade",
-    "programs/offer",
-    "programs/price",
-    "programs/profile",
+    "programs/*",
+    "common"
 ]
 
 [workspace.dependencies]
