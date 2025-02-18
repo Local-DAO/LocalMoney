@@ -1,6 +1,7 @@
 import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { expect } from "chai";
 import { Offer } from "../target/types/offer";
 import {
@@ -23,58 +24,68 @@ describe("offer", () => {
   const creator = Keypair.generate();
   const taker = Keypair.generate();
   const offer = Keypair.generate();
-  const tokenMint = Keypair.generate();
-
-  // Token accounts
+  const tokenMintKeypair = Keypair.generate();
+  
+  // Token accounts and mint
+  let tokenMint: PublicKey;
   let creatorTokenAccount: PublicKey;
   let takerTokenAccount: PublicKey;
   let escrowTokenAccount: PublicKey;
 
+  // Program IDs
+  const TRADE_PROGRAM_ID = new PublicKey("ENJvkqkwjEKd2CPd9NgcwEywx6ia3tCrvHE1ReZGac8t");
+
   before(async () => {
     // Airdrop SOL to participants
-    await airdropSol(provider.connection, creator.publicKey);
-    await airdropSol(provider.connection, taker.publicKey);
+    await airdropSol(provider.connection, creator.publicKey, 100);
+    await delay(1000);
+    await airdropSol(provider.connection, taker.publicKey, 100);
     await delay(1000);
 
-    // Initialize token mint and accounts
-    await createTokenMint(
+    // Initialize token mint
+    tokenMint = await createTokenMint(
       provider.connection,
       creator,
       creator.publicKey,
       null,
       6
     );
+    await delay(500);
 
     creatorTokenAccount = await createTokenAccount(
       provider.connection,
       creator,
-      tokenMint.publicKey,
+      tokenMint,
       creator.publicKey
     );
+    await delay(500);
 
     takerTokenAccount = await createTokenAccount(
       provider.connection,
       taker,
-      tokenMint.publicKey,
+      tokenMint,
       taker.publicKey
     );
+    await delay(500);
 
     escrowTokenAccount = await createTokenAccount(
       provider.connection,
       creator,
-      tokenMint.publicKey,
+      tokenMint,
       program.programId
     );
+    await delay(500);
 
     // Mint some tokens to creator
     await mintTokens(
       provider.connection,
       creator,
-      tokenMint.publicKey,
+      tokenMint,
       creatorTokenAccount,
       creator,
       1000_000_000 // 1000 tokens with 6 decimals
     );
+    await delay(500);
   });
 
   it("Creates an offer", async () => {
@@ -88,7 +99,7 @@ describe("offer", () => {
       .accounts({
         offer: offer.publicKey,
         creator: creator.publicKey,
-        tokenMint: tokenMint.publicKey,
+        tokenMint: tokenMint,
         systemProgram: SystemProgram.programId,
       })
       .signers([creator, offer])
@@ -96,12 +107,12 @@ describe("offer", () => {
 
     const account = await program.account.offer.fetch(offer.publicKey);
     expect(account.creator.toString()).to.equal(creator.publicKey.toString());
-    expect(account.tokenMint.toString()).to.equal(tokenMint.publicKey.toString());
+    expect(account.tokenMint.toString()).to.equal(tokenMint.toString());
     expect(account.amount.toNumber()).to.equal(1000_000);
     expect(account.pricePerToken.toNumber()).to.equal(100_000);
     expect(account.minAmount.toNumber()).to.equal(100_000);
     expect(account.maxAmount.toNumber()).to.equal(1000_000);
-    expect(account.status).to.equal({ active: {} });
+    expect(account.status).to.deep.equal({ active: {} });
   });
 
   it("Fails to create offer with invalid amounts", async () => {
@@ -109,22 +120,22 @@ describe("offer", () => {
     const pricePerToken = new anchor.BN(100_000);
     const minAmount = new anchor.BN(2000_000); // Min > Max
     const maxAmount = new anchor.BN(1000_000);
+    const newOffer = Keypair.generate();
 
     try {
       await program.methods
         .createOffer(amount, pricePerToken, minAmount, maxAmount)
         .accounts({
-          offer: Keypair.generate().publicKey,
+          offer: newOffer.publicKey,
           creator: creator.publicKey,
-          tokenMint: tokenMint.publicKey,
+          tokenMint: tokenMint,
           systemProgram: SystemProgram.programId,
         })
-        .signers([creator])
+        .signers([creator, newOffer])
         .rpc();
       expect.fail("Expected error");
-    } catch (err) {
-      const anchorError = err as anchor.AnchorError;
-      expect(anchorError.error.errorCode.code).to.equal("InvalidAmounts");
+    } catch (err: any) {
+      expect(err.error.errorCode.code).to.equal("InvalidAmounts");
     }
   });
 
@@ -202,7 +213,7 @@ describe("offer", () => {
       .accounts({
         offer: newOffer.publicKey,
         creator: creator.publicKey,
-        tokenMint: tokenMint.publicKey,
+        tokenMint: tokenMint,
         systemProgram: SystemProgram.programId,
       })
       .signers([creator, newOffer])
@@ -212,51 +223,132 @@ describe("offer", () => {
     const takeAmount = new anchor.BN(500_000); // 0.5 token
     const trade = Keypair.generate();
 
-    await program.methods
-      .takeOffer(takeAmount)
-      .accounts({
-        offer: newOffer.publicKey,
-        taker: taker.publicKey,
-        trade: trade.publicKey,
-        tokenMint: tokenMint.publicKey,
-        sellerTokenAccount: creatorTokenAccount,
-        escrowAccount: escrowTokenAccount,
-        tokenProgram: anchor.spl.token.TOKEN_PROGRAM_ID,
-        tradeProgram: trade.publicKey, // This would be the actual trade program in production
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([taker, trade])
-      .rpc();
+    // Initialize trade account with proper space
+    const TRADE_ACCOUNT_SIZE = 8 + // discriminator
+      32 + // seller pubkey
+      32 + // buyer pubkey (option)
+      8 + // amount
+      8 + // price
+      32 + // token mint
+      32 + // escrow account
+      1 + // status
+      8 + // created_at
+      8; // updated_at
 
-    // Verify token transfer to escrow
-    const escrowBalance = await getTokenBalance(provider.connection, escrowTokenAccount);
-    expect(escrowBalance).to.equal(500_000);
+    const rent = await provider.connection.getMinimumBalanceForRentExemption(TRADE_ACCOUNT_SIZE);
+
+    try {
+      // Create trade account and take offer in one transaction
+      await program.methods
+        .takeOffer(takeAmount)
+        .accounts({
+          offer: newOffer.publicKey,
+          taker: taker.publicKey,
+          trade: trade.publicKey,
+          tokenMint: tokenMint,
+          sellerTokenAccount: creatorTokenAccount,
+          escrowAccount: escrowTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          tradeProgram: TRADE_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .preInstructions([
+          SystemProgram.createAccount({
+            fromPubkey: provider.wallet.publicKey,
+            newAccountPubkey: trade.publicKey,
+            lamports: rent,
+            space: TRADE_ACCOUNT_SIZE,
+            programId: TRADE_PROGRAM_ID,
+          }),
+          // Initialize trade account with the trade program
+          {
+            programId: TRADE_PROGRAM_ID,
+            keys: [
+              { pubkey: trade.publicKey, isSigner: false, isWritable: true },
+              { pubkey: creator.publicKey, isSigner: true, isWritable: true },
+              { pubkey: tokenMint, isSigner: false, isWritable: false },
+              { pubkey: creatorTokenAccount, isSigner: false, isWritable: true },
+              { pubkey: escrowTokenAccount, isSigner: false, isWritable: true },
+              { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+              { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+            ],
+            data: Buffer.from([0]), // CreateTrade instruction = 0
+          },
+        ])
+        .signers([taker, trade, creator])
+        .rpc();
+
+      // Verify token transfer to escrow
+      const escrowBalance = await getTokenBalance(provider.connection, escrowTokenAccount);
+      expect(escrowBalance).to.equal(500_000);
+    } catch (err) {
+      console.error("Error taking offer:", err);
+      throw err;
+    }
   });
 
   it("Fails to take offer with invalid amount", async () => {
     const takeAmount = new anchor.BN(50_000); // Below min amount
     const trade = Keypair.generate();
+    const newOffer = Keypair.generate();
+
+    // First create a valid offer
+    await program.methods
+      .createOffer(
+        new anchor.BN(1000_000),
+        new anchor.BN(100_000),
+        new anchor.BN(100_000),
+        new anchor.BN(1000_000)
+      )
+      .accounts({
+        offer: newOffer.publicKey,
+        creator: creator.publicKey,
+        tokenMint: tokenMint,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([creator, newOffer])
+      .rpc();
+
+    // Initialize trade account
+    const rent = await provider.connection.getMinimumBalanceForRentExemption(0);
+    const createTradeAccountIx = SystemProgram.createAccount({
+      fromPubkey: provider.wallet.publicKey,
+      newAccountPubkey: trade.publicKey,
+      lamports: rent,
+      space: 0,
+      programId: TRADE_PROGRAM_ID,
+    });
 
     try {
+      // First create the trade account
+      await provider.sendAndConfirm(
+        new anchor.web3.Transaction().add(createTradeAccountIx),
+        [trade]
+      );
+
+      // Then try to take the offer with invalid amount
       await program.methods
         .takeOffer(takeAmount)
         .accounts({
-          offer: offer.publicKey,
+          offer: newOffer.publicKey,
           taker: taker.publicKey,
           trade: trade.publicKey,
-          tokenMint: tokenMint.publicKey,
+          tokenMint: tokenMint,
           sellerTokenAccount: creatorTokenAccount,
           escrowAccount: escrowTokenAccount,
-          tokenProgram: anchor.spl.token.TOKEN_PROGRAM_ID,
-          tradeProgram: trade.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          tradeProgram: TRADE_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
         })
-        .signers([taker, trade])
+        .signers([taker])
         .rpc();
       expect.fail("Expected error");
-    } catch (err) {
-      const anchorError = err as anchor.AnchorError;
-      expect(anchorError.error.errorCode.code).to.equal("InvalidAmount");
+    } catch (err: any) {
+      if (err.toString().includes("InvalidAmount")) {
+        // Test passed - we got the expected error
+        return;
+      }
+      throw err;
     }
   });
 }); 
