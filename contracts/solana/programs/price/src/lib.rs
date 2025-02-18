@@ -1,10 +1,7 @@
 use anchor_lang::prelude::*;
-use solana_program::{
-    program::invoke,
-    instruction::{Instruction, AccountMeta},
-};
+use solana_program::msg;
 
-declare_id!("5XkzWi5XrzgZGTw6YAYm4brCsRTYGCZpNiZJkMWwWUx5");
+declare_id!("96qmPcTg1LHUK79c76rVVxGKjpGq1UtDpJx4ca3mdTa2");
 
 #[program]
 pub mod price {
@@ -15,24 +12,25 @@ pub mod price {
         state.admin = ctx.accounts.admin.key();
         state.price_provider = ctx.accounts.admin.key(); // Initially set to admin
         state.is_initialized = true;
+        state.prices = Vec::new();
 
         msg!("Price oracle initialized successfully");
         Ok(())
     }
 
-    pub fn register_hub(ctx: Context<RegisterHub>) -> Result<()> {
-        // Add hub registration logic here
-        msg!("Hub registered successfully");
-        Ok(())
-    }
-
     pub fn update_prices(ctx: Context<UpdatePrices>, prices: Vec<CurrencyPrice>) -> Result<()> {
-        // Update prices in the oracle account
-        for price in prices {
-            msg!("Updating price for {}: {}", price.currency, price.usd_price);
-            // Add price update logic here
-        }
+        let oracle = &mut ctx.accounts.oracle;
 
+        // Validate the price provider
+        require!(
+            ctx.accounts.price_provider.key() == oracle.price_provider,
+            PriceError::InvalidPriceProvider
+        );
+
+        // Update all prices
+        oracle.prices = prices.clone();
+
+        msg!("Updated {} prices in the oracle", prices.len());
         Ok(())
     }
 
@@ -49,35 +47,57 @@ pub mod price {
         Ok(())
     }
 
-    pub fn verify_price_for_trade(ctx: Context<VerifyPrice>, trade_price: u64) -> Result<()> {
+    pub fn verify_price_for_trade(
+        ctx: Context<VerifyPrice>,
+        trade_price: u64,
+        currency: String,
+        tolerance_bps: u16, // Basis points (1/10000) of allowed deviation
+    ) -> Result<()> {
         let state = &ctx.accounts.state;
         require!(state.is_initialized, PriceError::NotInitialized);
 
-        // Verify the hub program is calling through CPI
-        let hub_accounts = vec![
-            AccountMeta::new_readonly(ctx.accounts.hub_config.key(), false),
-        ];
+        // Find the reference price for the given currency
+        let reference_price = state
+            .prices
+            .iter()
+            .find(|p| p.currency == currency)
+            .ok_or(PriceError::PriceNotFound)?;
 
-        invoke(
-            &Instruction {
-                program_id: ctx.accounts.hub_program.key(),
-                accounts: hub_accounts,
-                data: vec![], // Add proper hub verification instruction data
-            },
-            &[ctx.accounts.hub_config.to_account_info()],
-        )?;
+        // Calculate allowed deviation range
+        let tolerance = (reference_price.usd_price as u128)
+            .checked_mul(tolerance_bps as u128)
+            .unwrap_or(0)
+            .checked_div(10000)
+            .unwrap_or(0) as u64;
 
-        // Add price verification logic here
-        // For example, check if trade_price is within acceptable range of oracle price
+        let min_allowed = reference_price.usd_price.saturating_sub(tolerance);
+        let max_allowed = reference_price.usd_price.saturating_add(tolerance);
 
-        msg!("Price verified successfully");
+        require!(
+            trade_price >= min_allowed && trade_price <= max_allowed,
+            PriceError::PriceOutOfRange
+        );
+
+        msg!(
+            "Price verified successfully within {}bps tolerance",
+            tolerance_bps
+        );
         Ok(())
     }
 }
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(init, payer = admin, space = 8 + std::mem::size_of::<PriceState>())]
+    #[account(
+        init,
+        payer = admin,
+        space = 8 + // discriminator
+            1 + // is_initialized
+            32 + // admin
+            32 + // price_provider
+            4 + // vec length
+            10 * (4 + 32 + 8 + 8) // space for 10 prices (string length + string + price + timestamp)
+    )]
     pub state: Account<'info, PriceState>,
     #[account(mut)]
     pub admin: Signer<'info>,
@@ -85,19 +105,12 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
-pub struct RegisterHub<'info> {
-    /// CHECK: Hub account to be registered
-    pub hub_account: UncheckedAccount<'info>,
-    #[account(mut, has_one = admin)]
-    pub state: Account<'info, PriceState>,
-    pub admin: Signer<'info>,
-}
-
-#[derive(Accounts)]
 pub struct UpdatePrices<'info> {
     #[account(mut)]
     pub oracle: Account<'info, PriceState>,
-    #[account(constraint = price_provider.key() == oracle.price_provider)]
+    #[account(
+        constraint = price_provider.key() == oracle.price_provider @ PriceError::InvalidPriceProvider
+    )]
     pub price_provider: Signer<'info>,
 }
 
@@ -115,10 +128,6 @@ pub struct RegisterPriceRoute<'info> {
 #[derive(Accounts)]
 pub struct VerifyPrice<'info> {
     pub state: Account<'info, PriceState>,
-    /// CHECK: Hub program config
-    pub hub_config: AccountInfo<'info>,
-    /// CHECK: Hub program
-    pub hub_program: AccountInfo<'info>,
 }
 
 #[account]
@@ -126,6 +135,7 @@ pub struct PriceState {
     pub is_initialized: bool,
     pub admin: Pubkey,
     pub price_provider: Pubkey,
+    pub prices: Vec<CurrencyPrice>,
 }
 
 #[account]
@@ -155,11 +165,8 @@ pub enum PriceError {
     InvalidPriceProvider,
     #[msg("Invalid price route configuration")]
     InvalidPriceRoute,
-}
-
-#[cfg(test)]
-mod tests {
-    
-
-    // Add tests here
+    #[msg("Price not found for the specified currency")]
+    PriceNotFound,
+    #[msg("Trade price is outside allowed range")]
+    PriceOutOfRange,
 }

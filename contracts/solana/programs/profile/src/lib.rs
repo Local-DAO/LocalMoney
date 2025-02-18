@@ -1,8 +1,5 @@
 use anchor_lang::prelude::*;
-use solana_program::{
-    program::invoke,
-    instruction::{Instruction, AccountMeta},
-};
+use solana_program::msg;
 
 declare_id!("CfC3efU4b5ppjSBYJwiKrZtz3hmzBBgSM2s6RCFN4nYA");
 
@@ -82,19 +79,8 @@ pub mod profile {
     }
 
     pub fn verify_trade_completion(ctx: Context<VerifyTradeCompletion>) -> Result<()> {
-        // Verify the trade status through CPI
-        let trade_accounts = vec![
-            AccountMeta::new_readonly(ctx.accounts.trade.key(), false),
-        ];
-
-        invoke(
-            &Instruction {
-                program_id: ctx.accounts.trade_program.key(),
-                accounts: trade_accounts,
-                data: vec![], // Add proper trade verification instruction data
-            },
-            &[ctx.accounts.trade.to_account_info()],
-        )?;
+        // Verify trade completion using common module
+        common::verify_trade_completion(&ctx.accounts.trade_program, &ctx.accounts.trade)?;
 
         // Update profile statistics
         let profile = &mut ctx.accounts.profile;
@@ -179,6 +165,6 @@ pub enum ProfileError {
 
 #[cfg(test)]
 mod tests {
-    
+
     // Add tests here
 }
