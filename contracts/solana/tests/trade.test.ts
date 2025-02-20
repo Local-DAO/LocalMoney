@@ -12,13 +12,21 @@ import {
   mintTokens,
   getTokenBalance,
 } from "./utils";
+import * as dotenv from "dotenv";
+
+// Load environment variables from .env file
+dotenv.config();
 
 describe("trade", () => {
+  if (!process.env.TRADE_PROGRAM_ID) {
+    throw new Error("TRADE_PROGRAM_ID not found in environment");
+  }
+
   // Configure the client to use the local cluster
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  const TRADE_PROGRAM_ID = new PublicKey("9S8i1BpwEW88Zn7uW28eBdYmw2C6EYwz1BHBoeZFkPCG");
+  const TRADE_PROGRAM_ID = new PublicKey(process.env.TRADE_PROGRAM_ID);
   const SPL_TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
   const program = new anchor.Program(
     require("../target/idl/trade.json"),

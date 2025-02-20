@@ -44,33 +44,36 @@ async function sendAndConfirmWithRetry(
 }
 
 describe("offer", () => {
+  if (!process.env.OFFER_PROGRAM_ID || !process.env.TRADE_PROGRAM_ID) {
+    throw new Error("Required program IDs not found in environment. Make sure OFFER_PROGRAM_ID and TRADE_PROGRAM_ID are set.");
+  }
+
   afterEach(async () => {
     await delay(DELAY_INTERVAL);
   });
 
-
   // Configure the client to use the local cluster with custom options
   const provider = new anchor.AnchorProvider(
-  new anchor.web3.Connection(
-    "http://localhost:8899",
+    new anchor.web3.Connection(
+      "http://localhost:8899",
+      {
+        commitment: "confirmed",
+        confirmTransactionInitialTimeout: 120000,
+        wsEndpoint: "ws://localhost:8900"
+      }
+    ),
+    (anchor.AnchorProvider.env() as any).wallet,
     {
       commitment: "confirmed",
-      confirmTransactionInitialTimeout: 120000,
-      wsEndpoint: "ws://localhost:8900"
+      preflightCommitment: "confirmed",
+      skipPreflight: true
     }
-  ),
-  (anchor.AnchorProvider.env() as any).wallet,
-  {
-    commitment: "confirmed",
-    preflightCommitment: "confirmed",
-    skipPreflight: true
-  }
-);
+  );
   anchor.setProvider(provider);
 
   // Initialize programs with specific program IDs
-  const OFFER_PROGRAM_ID = new PublicKey(process.env.OFFER_PROGRAM_ID || "6K5JnHicvejLWv4uTHPNSvcHRcmUWXMqrvHa6DqYQUU4");
-  const TRADE_PROGRAM_ID = new PublicKey(process.env.TRADE_PROGRAM_ID || "7VwNNAQsWceNCTiVaDaL7X7HL1ujN5RCha24DEJVRsQ3");
+  const OFFER_PROGRAM_ID = new PublicKey(process.env.OFFER_PROGRAM_ID);
+  const TRADE_PROGRAM_ID = new PublicKey(process.env.TRADE_PROGRAM_ID);
 
   const program = new anchor.Program(
     require("../target/idl/offer.json"),

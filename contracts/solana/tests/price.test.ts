@@ -4,13 +4,21 @@ import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import { expect } from "chai";
 import { airdropSol, delay } from "./utils";
 import * as fs from "fs";
+import * as dotenv from "dotenv";
+
+// Load environment variables from .env file
+dotenv.config();
 
 describe("price", () => {
+  if (!process.env.PRICE_PROGRAM_ID) {
+    throw new Error("PRICE_PROGRAM_ID not found in environment");
+  }
+
   // Configure the client to use the local cluster
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  const PROGRAM_ID = new PublicKey("YNFm4bfV6Zui5KrEu4JAZAex8wcyXDAcQQeKPCk2vHu");
+  const PROGRAM_ID = new PublicKey(process.env.PRICE_PROGRAM_ID);
   let program: Program;
   
   // Generate keypairs for our test
