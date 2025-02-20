@@ -26,6 +26,7 @@ pub mod trade {
         trade.status = TradeStatus::Open;
         trade.created_at = Clock::get()?.unix_timestamp;
         trade.updated_at = Clock::get()?.unix_timestamp;
+        trade.bump = ctx.bumps.trade;
 
         // Transfer tokens to escrow
         let transfer_ctx = CpiContext::new(
@@ -80,13 +81,23 @@ pub mod trade {
 
         // Transfer tokens from escrow to buyer
         let trade_account_info = ctx.accounts.trade.to_account_info();
-        let transfer_ctx = CpiContext::new(
+        let seller_key = ctx.accounts.seller.key();
+        let token_mint = ctx.accounts.trade.token_mint;
+        let seeds = &[
+            b"trade",
+            seller_key.as_ref(),
+            token_mint.as_ref(),
+            &[ctx.accounts.trade.bump],
+        ];
+        let signer = &[&seeds[..]];
+        let transfer_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             token::Transfer {
                 from: ctx.accounts.escrow_account.to_account_info(),
                 to: ctx.accounts.buyer_token_account.to_account_info(),
                 authority: trade_account_info,
             },
+            signer,
         );
         token::transfer(transfer_ctx, ctx.accounts.trade.amount)?;
 
@@ -121,23 +132,40 @@ pub mod trade {
     }
 
     pub fn cancel_trade(ctx: Context<CancelTrade>) -> Result<()> {
-        let trade = &mut ctx.accounts.trade;
-        require!(
-            trade.status == TradeStatus::Open,
-            TradeError::InvalidTradeStatus
-        );
+        // Verify trade status and store values we need
+        let bump;
+        let token_mint;
+        let amount;
+        {
+            let trade = &ctx.accounts.trade;
+            require!(
+                trade.status == TradeStatus::Open,
+                TradeError::InvalidTradeStatus
+            );
+            bump = trade.bump;
+            token_mint = trade.token_mint;
+            amount = trade.amount;
+        }
+
+        let seller_key = ctx.accounts.seller.key();
+        let trade_account_info = ctx.accounts.trade.to_account_info();
 
         // Return tokens from escrow to seller
-        let transfer_ctx = CpiContext::new(
+        let seeds = &[b"trade", seller_key.as_ref(), token_mint.as_ref(), &[bump]];
+        let signer = &[&seeds[..]];
+        let transfer_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             token::Transfer {
                 from: ctx.accounts.escrow_account.to_account_info(),
                 to: ctx.accounts.seller_token_account.to_account_info(),
-                authority: ctx.accounts.seller.to_account_info(),
+                authority: trade_account_info,
             },
+            signer,
         );
-        token::transfer(transfer_ctx, trade.amount)?;
+        token::transfer(transfer_ctx, amount)?;
 
+        // Update trade status
+        let trade = &mut ctx.accounts.trade;
         trade.status = TradeStatus::Cancelled;
         trade.updated_at = Clock::get()?.unix_timestamp;
 
@@ -147,16 +175,17 @@ pub mod trade {
 
     pub fn dispute_trade(ctx: Context<DisputeTrade>) -> Result<()> {
         let trade = &mut ctx.accounts.trade;
-        require!(
-            trade.status == TradeStatus::InProgress,
-            TradeError::InvalidTradeStatus
-        );
 
         // Verify disputer is either buyer or seller
         let disputer_key = ctx.accounts.disputer.key();
         require!(
             trade.seller == disputer_key || trade.buyer == Some(disputer_key),
             TradeError::UnauthorizedDisputer
+        );
+
+        require!(
+            trade.status == TradeStatus::InProgress,
+            TradeError::InvalidTradeStatus
         );
 
         trade.status = TradeStatus::Disputed;
@@ -187,6 +216,7 @@ pub struct Trade {
     pub status: TradeStatus,
     pub created_at: i64,
     pub updated_at: i64,
+    pub bump: u8,
 }
 
 #[derive(Accounts)]
@@ -205,6 +235,7 @@ pub struct CreateTrade<'info> {
             2 + // status (1 for enum discriminator, 1 for variant)
             8 + // created_at
             8 + // updated_at
+            1 + // bump
             64, // padding for future updates
         seeds = [b"trade", seller.key().as_ref(), token_mint.key().as_ref()],
         bump
@@ -236,7 +267,11 @@ pub struct AcceptTrade<'info> {
 
 #[derive(Accounts)]
 pub struct CompleteTrade<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"trade", seller.key().as_ref(), trade.token_mint.as_ref()],
+        bump,
+    )]
     pub trade: Account<'info, Trade>,
     #[account(constraint = seller.key() == trade.seller)]
     pub seller: Signer<'info>,
@@ -279,7 +314,11 @@ pub struct CompleteTrade<'info> {
 
 #[derive(Accounts)]
 pub struct CancelTrade<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"trade", seller.key().as_ref(), trade.token_mint.as_ref()],
+        bump = trade.bump,
+    )]
     pub trade: Account<'info, Trade>,
     #[account(constraint = seller.key() == trade.seller)]
     pub seller: Signer<'info>,

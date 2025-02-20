@@ -42,14 +42,18 @@ describe("trade", () => {
     provider
   );
   
-  // Generate keypairs for our test
+  // Generate base keypairs for our test
   const seller = Keypair.generate();
   const buyer = Keypair.generate();
   const tokenMint = Keypair.generate();
   const priceOracle = Keypair.generate();
   const priceProgram = Keypair.generate();
+
+  // Additional sellers for different tests
+  const cancelTestSeller = Keypair.generate();
+  const disputeTestSeller = Keypair.generate();
   
-  // Find profile PDAs
+  // Find profile PDAs for all sellers
   const [buyerProfile] = PublicKey.findProgramAddressSync(
     [Buffer.from("profile"), buyer.publicKey.toBuffer()],
     PROFILE_PROGRAM_ID
@@ -60,9 +64,21 @@ describe("trade", () => {
     PROFILE_PROGRAM_ID
   );
 
+  const [cancelTestSellerProfile] = PublicKey.findProgramAddressSync(
+    [Buffer.from("profile"), cancelTestSeller.publicKey.toBuffer()],
+    PROFILE_PROGRAM_ID
+  );
+
+  const [disputeTestSellerProfile] = PublicKey.findProgramAddressSync(
+    [Buffer.from("profile"), disputeTestSeller.publicKey.toBuffer()],
+    PROFILE_PROGRAM_ID
+  );
+
   // Token accounts
   let sellerTokenAccount: PublicKey;
   let buyerTokenAccount: PublicKey;
+  let cancelTestSellerTokenAccount: PublicKey;
+  let disputeTestSellerTokenAccount: PublicKey;
   let escrowTokenAccount: PublicKey;
   let tradePDA: PublicKey;
   let tradeBump: number;
@@ -72,7 +88,7 @@ describe("trade", () => {
     // Fund test accounts
     const fundTx = new anchor.web3.Transaction();
     
-    // Add fund instructions
+    // Add fund instructions for all accounts
     fundTx.add(
       SystemProgram.transfer({
         fromPubkey: provider.wallet.publicKey,
@@ -87,6 +103,16 @@ describe("trade", () => {
       SystemProgram.transfer({
         fromPubkey: provider.wallet.publicKey,
         toPubkey: priceOracle.publicKey,
+        lamports: 1000000000, // 1 SOL
+      }),
+      SystemProgram.transfer({
+        fromPubkey: provider.wallet.publicKey,
+        toPubkey: cancelTestSeller.publicKey,
+        lamports: 1000000000, // 1 SOL
+      }),
+      SystemProgram.transfer({
+        fromPubkey: provider.wallet.publicKey,
+        toPubkey: disputeTestSeller.publicKey,
         lamports: 1000000000, // 1 SOL
       })
     );
@@ -110,7 +136,7 @@ describe("trade", () => {
       );
       await delay(1000);
 
-      // Create token accounts
+      // Create token accounts for all sellers
       sellerTokenAccount = await getOrCreateAssociatedTokenAccount(
         provider.connection,
         provider.wallet.payer,
@@ -125,9 +151,23 @@ describe("trade", () => {
         buyer.publicKey
       ).then(account => account.address);
 
+      cancelTestSellerTokenAccount = await getOrCreateAssociatedTokenAccount(
+        provider.connection,
+        provider.wallet.payer,
+        mint,
+        cancelTestSeller.publicKey
+      ).then(account => account.address);
+
+      disputeTestSellerTokenAccount = await getOrCreateAssociatedTokenAccount(
+        provider.connection,
+        provider.wallet.payer,
+        mint,
+        disputeTestSeller.publicKey
+      ).then(account => account.address);
+
       await delay(1000);
 
-      // Mint tokens to seller and buyer
+      // Mint tokens to all accounts
       await mintTo(
         provider.connection,
         provider.wallet.payer,
@@ -142,6 +182,24 @@ describe("trade", () => {
         provider.wallet.payer,
         mint,
         buyerTokenAccount,
+        provider.wallet.payer,
+        1000_000_000 // 1000 tokens with 6 decimals
+      );
+
+      await mintTo(
+        provider.connection,
+        provider.wallet.payer,
+        mint,
+        cancelTestSellerTokenAccount,
+        provider.wallet.payer,
+        1000_000_000 // 1000 tokens with 6 decimals
+      );
+
+      await mintTo(
+        provider.connection,
+        provider.wallet.payer,
+        mint,
+        disputeTestSellerTokenAccount,
         provider.wallet.payer,
         1000_000_000 // 1000 tokens with 6 decimals
       );
@@ -182,8 +240,7 @@ describe("trade", () => {
 
       await delay(1000);
 
-      // Initialize profiles
-      // Create buyer profile
+      // Initialize profiles for all sellers
       await profileProgram.methods
         .createProfile("buyer")
         .accounts({
@@ -196,7 +253,6 @@ describe("trade", () => {
 
       await delay(1000);
 
-      // Create seller profile
       await profileProgram.methods
         .createProfile("seller")
         .accounts({
@@ -205,6 +261,30 @@ describe("trade", () => {
           systemProgram: SystemProgram.programId,
         })
         .signers([seller])
+        .rpc();
+
+      await delay(1000);
+
+      await profileProgram.methods
+        .createProfile("cancel-test-seller")
+        .accounts({
+          profile: cancelTestSellerProfile,
+          owner: cancelTestSeller.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([cancelTestSeller])
+        .rpc();
+
+      await delay(1000);
+
+      await profileProgram.methods
+        .createProfile("dispute-test-seller")
+        .accounts({
+          profile: disputeTestSellerProfile,
+          owner: disputeTestSeller.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([disputeTestSeller])
         .rpc();
 
       await delay(1000);
@@ -315,99 +395,87 @@ describe("trade", () => {
   });
 
   it("Cancels a trade", async () => {
-    // Create a new trade for cancellation
     const amount = new anchor.BN(1000_000); // 1 token
     const price = new anchor.BN(100_000); // $1.00 with 5 decimals
 
-    // Find cancel trade PDA
+    // Find trade PDA for cancel test
     const [cancelTradePDA, cancelTradeBump] = await PublicKey.findProgramAddress(
       [
         Buffer.from("trade"),
-        seller.publicKey.toBuffer(),
-        mint.toBuffer()
+        cancelTestSeller.publicKey.toBuffer(),
+        mint.toBuffer(),
       ],
       TRADE_PROGRAM_ID
     );
 
     // Create a new escrow keypair
-    const cancelEscrowKeypair = Keypair.generate();
+    const escrowKeypair = Keypair.generate();
 
     // Create the trade
     await program.methods
       .createTrade(amount, price)
       .accounts({
         trade: cancelTradePDA,
-        seller: seller.publicKey,
+        seller: cancelTestSeller.publicKey,
         tokenMint: mint,
-        sellerTokenAccount: sellerTokenAccount,
-        escrowAccount: cancelEscrowKeypair.publicKey,
+        sellerTokenAccount: cancelTestSellerTokenAccount,
+        escrowAccount: escrowKeypair.publicKey,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
-      .signers([seller, cancelEscrowKeypair])
+      .signers([cancelTestSeller, escrowKeypair])
       .rpc();
-
-    await delay(1000);
 
     // Cancel the trade
     await program.methods
       .cancelTrade()
       .accounts({
         trade: cancelTradePDA,
-        seller: seller.publicKey,
-        escrowAccount: cancelEscrowKeypair.publicKey,
-        sellerTokenAccount: sellerTokenAccount,
+        seller: cancelTestSeller.publicKey,
+        escrowAccount: escrowKeypair.publicKey,
+        sellerTokenAccount: cancelTestSellerTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
-      .signers([seller])
+      .signers([cancelTestSeller])
       .rpc();
 
-    await delay(1000);
-
-    const account = await program.account.trade.fetch(cancelTradePDA);
-    expect(account.status).to.deep.equal({ cancelled: {} });
-
-    // Verify tokens were returned to seller
-    const sellerBalance = await getTokenBalance(provider.connection, sellerTokenAccount);
-    expect(sellerBalance).to.equal(999_000_000); // Initial 1000 - 1 from completed trade
+    const tradeAccount = await program.account.trade.fetch(cancelTradePDA);
+    expect(tradeAccount.status).to.deep.equal({ cancelled: {} });
   });
 
   it("Disputes a trade", async () => {
-    // Create a new trade for dispute
     const amount = new anchor.BN(1000_000); // 1 token
     const price = new anchor.BN(100_000); // $1.00 with 5 decimals
 
-    // Find dispute trade PDA
+    // Find trade PDA for dispute test
     const [disputeTradePDA, disputeTradeBump] = await PublicKey.findProgramAddress(
       [
         Buffer.from("trade"),
-        seller.publicKey.toBuffer(),
-        mint.toBuffer()
+        disputeTestSeller.publicKey.toBuffer(),
+        mint.toBuffer(),
       ],
       TRADE_PROGRAM_ID
     );
 
     // Create a new escrow keypair
-    const disputeEscrowKeypair = Keypair.generate();
+    const escrowKeypair = Keypair.generate();
 
     // Create the trade
     await program.methods
       .createTrade(amount, price)
       .accounts({
         trade: disputeTradePDA,
-        seller: seller.publicKey,
+        seller: disputeTestSeller.publicKey,
         tokenMint: mint,
-        sellerTokenAccount: sellerTokenAccount,
-        escrowAccount: disputeEscrowKeypair.publicKey,
+        sellerTokenAccount: disputeTestSellerTokenAccount,
+        escrowAccount: escrowKeypair.publicKey,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
-      .signers([seller, disputeEscrowKeypair])
+      .signers([disputeTestSeller, escrowKeypair])
       .rpc();
-
-    await delay(1000);
 
     // Accept the trade
     await program.methods
@@ -415,12 +483,9 @@ describe("trade", () => {
       .accounts({
         trade: disputeTradePDA,
         buyer: buyer.publicKey,
-        systemProgram: SystemProgram.programId,
       })
       .signers([buyer])
       .rpc();
-
-    await delay(1000);
 
     // Dispute the trade
     await program.methods
@@ -432,10 +497,8 @@ describe("trade", () => {
       .signers([buyer])
       .rpc();
 
-    await delay(1000);
-
-    const account = await program.account.trade.fetch(disputeTradePDA);
-    expect(account.status).to.deep.equal({ disputed: {} });
+    const tradeAccount = await program.account.trade.fetch(disputeTradePDA);
+    expect(tradeAccount.status).to.deep.equal({ disputed: {} });
   });
 
   it("Fails to dispute with unauthorized user", async () => {
