@@ -19,8 +19,9 @@ default = []
 anchor-lang = "0.29.0"
 anchor-spl = "0.29.0"
 solana-program = "1.17"
-common = { path = "../../common" }
 trade = { path = "../trade", features = ["cpi"] }
+common = { path = "../../common" }
+spl-token = "4.0"
 
 [dev-dependencies]
 solana-program-test = "1.17"

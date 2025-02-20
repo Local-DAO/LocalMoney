@@ -2,7 +2,6 @@ import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import { expect } from "chai";
-import { IDL } from "../target/types/price";
 import { airdropSol, delay } from "./utils";
 import * as fs from "fs";
 
@@ -11,8 +10,8 @@ describe("price", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  const PROGRAM_ID = new PublicKey("96qmPcTg1LHUK79c76rVVxGKjpGq1UtDpJx4ca3mdTa2");
-  const program = new Program(IDL, PROGRAM_ID, provider);
+  const PROGRAM_ID = new PublicKey("YNFm4bfV6Zui5KrEu4JAZAex8wcyXDAcQQeKPCk2vHu");
+  let program: Program;
   
   // Generate keypairs for our test
   const admin = Keypair.generate();
@@ -24,6 +23,10 @@ describe("price", () => {
   const testKeypair = Keypair.fromSecretKey(new Uint8Array(testKeypairData));
 
   before(async () => {
+    // Load the IDL directly from the file
+    const idl = require("../target/idl/price.json");
+    program = new anchor.Program(idl, PROGRAM_ID, provider);
+
     // Airdrop SOL to test keypair, admin and price provider
     await airdropSol(provider.connection, testKeypair.publicKey);
     await airdropSol(provider.connection, admin.publicKey);

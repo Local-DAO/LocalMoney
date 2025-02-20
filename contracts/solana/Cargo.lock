@@ -2754,6 +2754,7 @@ dependencies = [
  "solana-program",
  "solana-program-test",
  "solana-sdk",
+ "spl-token",
  "tokio",
  "trade",
 ]
@@ -5815,6 +5816,8 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "common",
+ "price",
+ "profile",
  "solana-program",
  "solana-program-test",
  "solana-sdk",

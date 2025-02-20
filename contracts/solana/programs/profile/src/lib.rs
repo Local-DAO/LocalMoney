@@ -142,6 +142,7 @@ pub struct VerifyTradeCompletion<'info> {
 }
 
 #[account]
+#[derive(Default)]
 pub struct Profile {
     pub owner: Pubkey,
     pub username: String,
@@ -162,6 +163,9 @@ pub enum ProfileError {
     #[msg("Invalid trade program")]
     InvalidTradeProgram,
 }
+
+// Re-export for CPI
+pub use profile::*;
 
 #[cfg(test)]
 mod tests {

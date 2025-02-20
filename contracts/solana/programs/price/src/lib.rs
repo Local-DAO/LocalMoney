@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use solana_program::msg;
 
-declare_id!("96qmPcTg1LHUK79c76rVVxGKjpGq1UtDpJx4ca3mdTa2");
+declare_id!("98Cz1djtXYRfcRUq1gf9GKhjrS7nfdP3AHzoP9PCujD8");
 
 #[program]
 pub mod price {
@@ -131,6 +131,7 @@ pub struct VerifyPrice<'info> {
 }
 
 #[account]
+#[derive(Default)]
 pub struct PriceState {
     pub is_initialized: bool,
     pub admin: Pubkey,
@@ -170,3 +171,6 @@ pub enum PriceError {
     #[msg("Trade price is outside allowed range")]
     PriceOutOfRange,
 }
+
+// Re-export for CPI
+pub use price::*;
