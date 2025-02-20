@@ -133,7 +133,7 @@ describe("price", () => {
           100 // 1% tolerance
         )
         .accounts({
-          state: priceState.publicKey,
+          oracle: priceState.publicKey,
         })
         .rpc();
     }
@@ -156,7 +156,7 @@ describe("price", () => {
             100 // 1% tolerance
           )
           .accounts({
-            state: priceState.publicKey,
+            oracle: priceState.publicKey,
           })
           .rpc();
         expect.fail("Expected error");
@@ -176,7 +176,7 @@ describe("price", () => {
           100 // 1% tolerance
         )
         .accounts({
-          state: priceState.publicKey,
+          oracle: priceState.publicKey,
         })
         .rpc();
       expect.fail("Expected error");

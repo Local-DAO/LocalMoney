@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use solana_program::msg;
 
-declare_id!("98Cz1djtXYRfcRUq1gf9GKhjrS7nfdP3AHzoP9PCujD8");
+declare_id!("46gvdsp9gen8qNWdyvqVEXoysayTkXH6G4AMj9DJZiaZ");
 
 #[program]
 pub mod price {
@@ -53,11 +53,11 @@ pub mod price {
         currency: String,
         tolerance_bps: u16, // Basis points (1/10000) of allowed deviation
     ) -> Result<()> {
-        let state = &ctx.accounts.state;
-        require!(state.is_initialized, PriceError::NotInitialized);
+        let oracle = &ctx.accounts.oracle;
+        require!(oracle.is_initialized, PriceError::NotInitialized);
 
         // Find the reference price for the given currency
-        let reference_price = state
+        let reference_price = oracle
             .prices
             .iter()
             .find(|p| p.currency == currency)
@@ -127,7 +127,7 @@ pub struct RegisterPriceRoute<'info> {
 
 #[derive(Accounts)]
 pub struct VerifyPrice<'info> {
-    pub state: Account<'info, PriceState>,
+    pub oracle: Account<'info, PriceState>,
 }
 
 #[account]

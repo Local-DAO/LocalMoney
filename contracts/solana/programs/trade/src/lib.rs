@@ -1,9 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar::rent::Rent;
-use anchor_lang::solana_program::{
-    instruction::{AccountMeta, Instruction},
-    program::invoke,
-};
+
 use anchor_spl::token::{self, Token};
 
 // Add imports for external programs
@@ -12,7 +9,7 @@ use price::{self, PriceState};
 use profile::program::Profile;
 use profile::{self, Profile as ProfileAccount};
 
-declare_id!("7VwNNAQsWceNCTiVaDaL7X7HL1ujN5RCha24DEJVRsQ3");
+declare_id!("8c2oLSoAo2FG2HpyvhfNghRTzpQRV4k3wR7jWPA4rHpH");
 
 #[program]
 pub mod trade {
@@ -66,21 +63,19 @@ pub mod trade {
             TradeError::InvalidTradeStatus
         );
 
-        // Verify price using invoke
-        let price_accounts = vec![AccountMeta::new_readonly(
-            ctx.accounts.price_oracle.key(),
-            false,
-        )];
-        let mut price_data = vec![0];
-        price_data.extend_from_slice(&ctx.accounts.trade.price.to_le_bytes());
+        // Verify price using CPI
+        let cpi_program = ctx.accounts.price_program.to_account_info();
+        let cpi_accounts = price::cpi::accounts::VerifyPrice {
+            oracle: ctx.accounts.price_oracle.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
 
-        invoke(
-            &Instruction {
-                program_id: ctx.accounts.price_program.key(),
-                accounts: price_accounts,
-                data: price_data,
-            },
-            &[ctx.accounts.price_oracle.to_account_info()],
+        // Call verify_price_for_trade with the correct parameters
+        price::cpi::verify_price_for_trade(
+            cpi_ctx,
+            ctx.accounts.trade.price,
+            "USD".to_string(),
+            100, // 1% tolerance
         )?;
 
         // Transfer tokens from escrow to buyer
@@ -95,41 +90,26 @@ pub mod trade {
         );
         token::transfer(transfer_ctx, ctx.accounts.trade.amount)?;
 
-        // Update profiles using invoke
-        let buyer_profile_accounts = vec![
-            AccountMeta::new(ctx.accounts.buyer_profile.key(), false),
-            AccountMeta::new_readonly(ctx.accounts.trade.key(), false),
-        ];
-
-        invoke(
-            &Instruction {
-                program_id: ctx.accounts.profile_program.key(),
-                accounts: buyer_profile_accounts,
-                data: vec![2], // record_trade_completion instruction
+        // Update profiles using CPI
+        let buyer_profile_ctx = CpiContext::new(
+            ctx.accounts.profile_program.to_account_info(),
+            profile::cpi::accounts::RecordTrade {
+                profile: ctx.accounts.buyer_profile.to_account_info(),
+                owner: ctx.accounts.buyer.to_account_info(),
+                trade_program: ctx.accounts.trade.to_account_info(),
             },
-            &[
-                ctx.accounts.buyer_profile.to_account_info(),
-                ctx.accounts.trade.to_account_info(),
-            ],
-        )?;
+        );
+        profile::cpi::record_trade_completion(buyer_profile_ctx)?;
 
-        // Update seller profile
-        let seller_profile_accounts = vec![
-            AccountMeta::new(ctx.accounts.seller_profile.key(), false),
-            AccountMeta::new_readonly(ctx.accounts.trade.key(), false),
-        ];
-
-        invoke(
-            &Instruction {
-                program_id: ctx.accounts.profile_program.key(),
-                accounts: seller_profile_accounts,
-                data: vec![2], // record_trade_completion instruction
+        let seller_profile_ctx = CpiContext::new(
+            ctx.accounts.profile_program.to_account_info(),
+            profile::cpi::accounts::RecordTrade {
+                profile: ctx.accounts.seller_profile.to_account_info(),
+                owner: ctx.accounts.seller.to_account_info(),
+                trade_program: ctx.accounts.trade.to_account_info(),
             },
-            &[
-                ctx.accounts.seller_profile.to_account_info(),
-                ctx.accounts.trade.to_account_info(),
-            ],
-        )?;
+        );
+        profile::cpi::record_trade_completion(seller_profile_ctx)?;
 
         // Update trade status after all CPIs
         let trade = &mut ctx.accounts.trade;
@@ -276,11 +256,6 @@ pub struct CompleteTrade<'info> {
     pub token_program: Program<'info, Token>,
 
     // Price verification accounts with proper constraints
-    #[account(
-        seeds = [b"price_oracle"],
-        bump,
-        seeds::program = price_program.key()
-    )]
     pub price_oracle: Account<'info, PriceState>,
     pub price_program: Program<'info, Price>,
 

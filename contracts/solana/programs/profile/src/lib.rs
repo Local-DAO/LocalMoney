@@ -1,16 +1,38 @@
 use anchor_lang::prelude::*;
 use solana_program::msg;
 
-declare_id!("CfC3efU4b5ppjSBYJwiKrZtz3hmzBBgSM2s6RCFN4nYA");
+declare_id!("BdQcp74T7QWoXkX9cCndJLgghzannsJX6nfioRaDkZTT");
+
+// Constants for account sizes
+pub const MAX_USERNAME_LENGTH: usize = 32;
+pub const PROFILE_SIZE: usize = 8 + // discriminator
+    32 + // owner pubkey
+    4 + // username length
+    MAX_USERNAME_LENGTH + // username bytes
+    4 + // username_len
+    4 + // reputation_score
+    4 + // trades_completed
+    4 + // trades_disputed
+    1 + // is_verified
+    8 + // created_at
+    8 + // updated_at
+    64; // padding for future updates
 
 #[program]
 pub mod profile {
     use super::*;
 
     pub fn create_profile(ctx: Context<CreateProfile>, username: String) -> Result<()> {
+        require!(
+            username.len() <= MAX_USERNAME_LENGTH,
+            ProfileError::UsernameTooLong
+        );
+
         let profile = &mut ctx.accounts.profile;
         profile.owner = ctx.accounts.owner.key();
-        profile.username = username;
+        profile.username = [0u8; MAX_USERNAME_LENGTH];
+        profile.username[..username.len()].copy_from_slice(username.as_bytes());
+        profile.username_len = username.len() as u32;
         profile.reputation_score = 0;
         profile.trades_completed = 0;
         profile.trades_disputed = 0;
@@ -26,7 +48,13 @@ pub mod profile {
         let profile = &mut ctx.accounts.profile;
 
         if let Some(new_username) = username {
-            profile.username = new_username;
+            require!(
+                new_username.len() <= MAX_USERNAME_LENGTH,
+                ProfileError::UsernameTooLong
+            );
+            profile.username = [0u8; MAX_USERNAME_LENGTH];
+            profile.username[..new_username.len()].copy_from_slice(new_username.as_bytes());
+            profile.username_len = new_username.len() as u32;
         }
 
         profile.updated_at = Clock::get()?.unix_timestamp;
@@ -95,7 +123,13 @@ pub mod profile {
 
 #[derive(Accounts)]
 pub struct CreateProfile<'info> {
-    #[account(init, payer = owner, space = 8 + std::mem::size_of::<Profile>())]
+    #[account(
+        init,
+        payer = owner,
+        space = PROFILE_SIZE,
+        seeds = [b"profile", owner.key().as_ref()],
+        bump
+    )]
     pub profile: Account<'info, Profile>,
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -104,37 +138,66 @@ pub struct CreateProfile<'info> {
 
 #[derive(Accounts)]
 pub struct UpdateProfile<'info> {
-    #[account(mut, has_one = owner)]
+    #[account(
+        mut,
+        seeds = [b"profile", owner.key().as_ref()],
+        bump,
+        has_one = owner
+    )]
     pub profile: Account<'info, Profile>,
     pub owner: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct UpdateReputation<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"profile", owner.key().as_ref()],
+        bump
+    )]
     pub profile: Account<'info, Profile>,
     pub authority: Signer<'info>,
+    /// CHECK: Owner of the profile
+    pub owner: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
 pub struct VerifyProfile<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"profile", owner.key().as_ref()],
+        bump
+    )]
     pub profile: Account<'info, Profile>,
     pub authority: Signer<'info>,
+    /// CHECK: Owner of the profile
+    pub owner: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
 pub struct RecordTrade<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"profile", owner.key().as_ref()],
+        bump
+    )]
     pub profile: Account<'info, Profile>,
+    /// CHECK: Owner of the profile
+    pub owner: AccountInfo<'info>,
     /// CHECK: Trade program account, validated in program logic
     pub trade_program: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
 pub struct VerifyTradeCompletion<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"profile", owner.key().as_ref()],
+        bump
+    )]
     pub profile: Account<'info, Profile>,
+    /// CHECK: Owner of the profile
+    pub owner: AccountInfo<'info>,
     /// CHECK: Trade account to verify
     pub trade: AccountInfo<'info>,
     /// CHECK: Trade program
@@ -145,7 +208,8 @@ pub struct VerifyTradeCompletion<'info> {
 #[derive(Default)]
 pub struct Profile {
     pub owner: Pubkey,
-    pub username: String,
+    pub username: [u8; MAX_USERNAME_LENGTH],
+    pub username_len: u32,
     pub reputation_score: u32,
     pub trades_completed: u32,
     pub trades_disputed: u32,

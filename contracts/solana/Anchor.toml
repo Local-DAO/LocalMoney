@@ -3,14 +3,16 @@ seeds = false
 skip-lint = false
 
 [programs.localnet]
-price = "98Cz1djtXYRfcRUq1gf9GKhjrS7nfdP3AHzoP9PCujD8"
-offer = "6K5JnHicvejLWv4uTHPNSvcHRcmUWXMqrvHa6DqYQUU4"
-trade = "7VwNNAQsWceNCTiVaDaL7X7HL1ujN5RCha24DEJVRsQ3"
+price = "46gvdsp9gen8qNWdyvqVEXoysayTkXH6G4AMj9DJZiaZ"
+offer = "8bCncr1Fmop2aQbjDL87n25bYZW82t6MLZePzukLkrC"
+trade = "8c2oLSoAo2FG2HpyvhfNghRTzpQRV4k3wR7jWPA4rHpH"
+profile = "BdQcp74T7QWoXkX9cCndJLgghzannsJX6nfioRaDkZTT"
 
 [programs.mainnet]
 price = "YNFm4bfV6Zui5KrEu4JAZAex8wcyXDAcQQeKPCk2vHu"
-offer = "5uzvhpisZmWcZMNvNwNkGpDUbkYqLfZNcG2zxLmGgRgh"
+offer = "5uzvhpisZmWcZMNvNwNkGpDUbkYqLfZNcG6zxLmGgRgh"
 trade = "9S8i1BpwEW88Zn7uW28eBdYmw2C6EYwz1BHBoeZFkPCG"
+profile = "7GoJiURURQGCi7F46sHKpmm4jvL4xDSEgcEifgvEVbGA"
 
 [registry]
 url = "https://api.apr.dev"
@@ -27,13 +29,15 @@ types = "target/types"
 members = [
   "programs/price",
   "programs/offer",
-  "programs/trade"
+  "programs/trade",
+  "programs/profile"
 ]
 
 [workspace.metadata.program-sizes]
 price = 2097152
 offer = 1048576
 trade = 2097152
+profile = 2097152
 
 [test]
 startup_wait = 10000

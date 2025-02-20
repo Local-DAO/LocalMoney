@@ -3,7 +3,7 @@ use anchor_spl::token::{self, Token, TokenAccount};
 use trade::program::Trade as TradeProgram;
 use trade::{self, Trade};
 
-declare_id!("6K5JnHicvejLWv4uTHPNSvcHRcmUWXMqrvHa6DqYQUU4");
+declare_id!("8bCncr1Fmop2aQbjDL87n25bYZW82t6MLZePzukLkrC");
 
 // Constants for account sizes
 pub const MINT_SIZE: usize = 82;
@@ -326,7 +326,7 @@ mod tests {
         transaction::Transaction,
     };
 
-    const TRADE_PROGRAM_ID: &str = "7VwNNAQsWceNCTiVaDaL7X7HL1ujN5RCha24DEJVRsQ3";
+    const TRADE_PROGRAM_ID: &str = "8c2oLSoAo2FG2HpyvhfNghRTzpQRV4k3wR7jWPA4rHpH";
 
     #[tokio::test]
     async fn test_offer_flow() {
