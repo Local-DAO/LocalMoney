@@ -7,7 +7,7 @@
     "test:offer": "export ANCHOR_PROVIDER_URL=\"http://localhost:8899\" && export ANCHOR_WALLET=\"../target/deploy/test-keypair.json\" && npx ts-mocha -p ./tsconfig.json -t 1000000 offer.test.ts",
     "test:trade": "export ANCHOR_PROVIDER_URL=\"http://localhost:8899\" && export ANCHOR_WALLET=\"../target/deploy/test-keypair.json\" && npx ts-mocha -p ./tsconfig.json -t 1000000 trade.test.ts",
     "test:price": "export ANCHOR_PROVIDER_URL=\"http://localhost:8899\" && export ANCHOR_WALLET=\"../target/deploy/test-keypair.json\" && npx ts-mocha -p ./tsconfig.json -t 1000000 price.test.ts",
-    "test:all": "export ANCHOR_PROVIDER_URL=\"http://localhost:8899\" && export ANCHOR_WALLET=\"../target/deploy/test-keypair.json\" && npx ts-mocha -p ./tsconfig.json -t 1000000 *.test.ts"
+    "test:all": "export ANCHOR_PROVIDER_URL=\"http://localhost:8899\" && export ANCHOR_WALLET=\"../target/deploy/test-keypair.json\" && npx ts-mocha -p ./tsconfig.json -t 1000000 price.test.ts offer.test.ts trade.test.ts"
   },
   "devDependencies": {
     "@project-serum/anchor": "^0.26.0",

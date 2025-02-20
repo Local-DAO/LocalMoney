@@ -9,3 +9,5 @@ artifacts/
 .env
 codeIds.json
 /contracts/schema/
+test-ledger/
+
