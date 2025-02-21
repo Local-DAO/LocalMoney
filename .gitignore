@@ -10,4 +10,4 @@ artifacts/
 codeIds.json
 /contracts/schema/
 test-ledger/
-
+venv/
