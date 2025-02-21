@@ -1,18 +1,21 @@
+[toolchain]
+anchor_version = "0.29.0"
+
 [features]
 seeds = false
 skip-lint = false
 
 [programs.localnet]
-price = "46gvdsp9gen8qNWdyvqVEXoysayTkXH6G4AMj9DJZiaZ"
-offer = "8bCncr1Fmop2aQbjDL87n25bYZW82t6MLZePzukLkrC"
-trade = "8c2oLSoAo2FG2HpyvhfNghRTzpQRV4k3wR7jWPA4rHpH"
-profile = "BdQcp74T7QWoXkX9cCndJLgghzannsJX6nfioRaDkZTT"
+offer = "52CejgfZEeefMzvYqJ7RmcT4NzemCDZf4nsX3kywuw2B"
+price = "8uzArQW1YiLwh2CLQhMU1Ya774EMEbdbpgux6Tf8z1rn"
+profile = "BG73i544YBJXTQaHVqCcTo94pnwvMw4euWhk5V9UvQxK"
+trade = "437aWt9WrLYquEwJsVe3B3kANP77ZCvn4gs4hJBNLefG"
 
 [programs.mainnet]
-price = "YNFm4bfV6Zui5KrEu4JAZAex8wcyXDAcQQeKPCk2vHu"
-offer = "5uzvhpisZmWcZMNvNwNkGpDUbkYqLfZNcG6zxLmGgRgh"
-trade = "9S8i1BpwEW88Zn7uW28eBdYmw2C6EYwz1BHBoeZFkPCG"
-profile = "7GoJiURURQGCi7F46sHKpmm4jvL4xDSEgcEifgvEVbGA"
+offer = "52CejgfZEeefMzvYqJ7RmcT4NzemCDZf4nsX3kywuw2B"
+price = "8uzArQW1YiLwh2CLQhMU1Ya774EMEbdbpgux6Tf8z1rn"
+profile = "BG73i544YBJXTQaHVqCcTo94pnwvMw4euWhk5V9UvQxK"
+trade = "437aWt9WrLYquEwJsVe3B3kANP77ZCvn4gs4hJBNLefG"
 
 [registry]
 url = "https://api.apr.dev"
@@ -21,30 +24,20 @@ url = "https://api.apr.dev"
 cluster = "Localnet"
 wallet = "target/deploy/test-keypair.json"
 
+[workspace]
+members = ["programs/price", "programs/offer", "programs/trade", "programs/profile"]
+types = "target/types"
+
 [scripts]
 test = "cd tests && pnpm test:offer"
 
-[workspace]
-types = "target/types"
-members = [
-  "programs/price",
-  "programs/offer",
-  "programs/trade",
-  "programs/profile"
-]
-
-[workspace.metadata.program-sizes]
-price = 2097152
-offer = 1048576
-trade = 2097152
-profile = 2097152
-
 [test]
 startup_wait = 10000
+shutdown_wait = 2000
+upgradeable = false
 
 [test.validator]
+bind_address = "0.0.0.0"
 url = "http://127.0.0.1:8899"
-commitment = "processed"
-
-[toolchain]
-anchor_version = "0.29.0" 
+ledger = ".anchor/test-ledger"
+rpc_port = 8899

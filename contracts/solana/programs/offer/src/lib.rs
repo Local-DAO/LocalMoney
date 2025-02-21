@@ -3,7 +3,7 @@ use anchor_spl::token::{self, Token, TokenAccount};
 use trade::program::Trade as TradeProgram;
 use trade::{self, Trade};
 
-declare_id!("8bCncr1Fmop2aQbjDL87n25bYZW82t6MLZePzukLkrC");
+declare_id!("52CejgfZEeefMzvYqJ7RmcT4NzemCDZf4nsX3kywuw2B");
 
 // Constants for account sizes
 pub const MINT_SIZE: usize = 82;

@@ -1,8 +1,8 @@
 import * as anchor from "@project-serum/anchor";
-import { Program } from "@project-serum/anchor";
-import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
+import { PublicKey, Keypair } from "@solana/web3.js";
 import { expect } from "chai";
-import { airdropSol, delay } from "./utils";
+import { PriceClient } from "../sdk/src/clients/price";
+import { airdropSol, delay } from "../sdk/src/utils";
 import * as fs from "fs";
 import * as dotenv from "dotenv";
 
@@ -19,7 +19,7 @@ describe("price", () => {
   anchor.setProvider(provider);
 
   const PROGRAM_ID = new PublicKey(process.env.PRICE_PROGRAM_ID);
-  let program: Program;
+  let priceClient: PriceClient;
   
   // Generate keypairs for our test
   const admin = Keypair.generate();
@@ -33,7 +33,7 @@ describe("price", () => {
   before(async () => {
     // Load the IDL directly from the file
     const idl = require("../target/idl/price.json");
-    program = new anchor.Program(idl, PROGRAM_ID, provider);
+    priceClient = new PriceClient(PROGRAM_ID, provider, idl);
 
     // Airdrop SOL to test keypair, admin and price provider
     await airdropSol(provider.connection, testKeypair.publicKey);
@@ -43,17 +43,9 @@ describe("price", () => {
   });
 
   it("Initializes the price oracle", async () => {
-    await program.methods
-      .initialize()
-      .accounts({
-        state: priceState.publicKey,
-        admin: admin.publicKey,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([admin, priceState])
-      .rpc();
+    await priceClient.initialize(priceState, admin);
 
-    const account = await program.account.priceState.fetch(priceState.publicKey);
+    const account = await priceClient.getPriceState(priceState.publicKey);
     expect(account.isInitialized).to.be.true;
     expect(account.admin.toString()).to.equal(admin.publicKey.toString());
     expect(account.priceProvider.toString()).to.equal(admin.publicKey.toString());
@@ -74,16 +66,9 @@ describe("price", () => {
       },
     ];
 
-    await program.methods
-      .updatePrices(prices)
-      .accounts({
-        oracle: priceState.publicKey,
-        priceProvider: admin.publicKey,
-      })
-      .signers([admin])
-      .rpc();
+    await priceClient.updatePrices(priceState.publicKey, admin, prices);
 
-    const account = await program.account.priceState.fetch(priceState.publicKey);
+    const account = await priceClient.getPriceState(priceState.publicKey);
     expect(account.prices).to.have.lengthOf(2);
     expect(account.prices[0].currency).to.equal("USD");
     expect(account.prices[0].usdPrice.toNumber()).to.equal(100_000);
@@ -101,14 +86,7 @@ describe("price", () => {
     ];
 
     try {
-      await program.methods
-        .updatePrices(prices)
-        .accounts({
-          oracle: priceState.publicKey,
-          priceProvider: priceProvider.publicKey,
-        })
-        .signers([priceProvider])
-        .rpc();
+      await priceClient.updatePrices(priceState.publicKey, priceProvider, prices);
       expect.fail("Expected error");
     } catch (err) {
       const anchorError = err as anchor.AnchorError;
@@ -126,16 +104,12 @@ describe("price", () => {
     ];
 
     for (const price of tradePrices) {
-      await program.methods
-        .verifyPriceForTrade(
-          new anchor.BN(price),
-          "USD",
-          100 // 1% tolerance
-        )
-        .accounts({
-          oracle: priceState.publicKey,
-        })
-        .rpc();
+      await priceClient.verifyPriceForTrade(
+        priceState.publicKey,
+        new anchor.BN(price),
+        "USD",
+        100 // 1% tolerance
+      );
     }
   });
 
@@ -149,16 +123,12 @@ describe("price", () => {
 
     for (const price of tradePrices) {
       try {
-        await program.methods
-          .verifyPriceForTrade(
-            new anchor.BN(price),
-            "USD",
-            100 // 1% tolerance
-          )
-          .accounts({
-            oracle: priceState.publicKey,
-          })
-          .rpc();
+        await priceClient.verifyPriceForTrade(
+          priceState.publicKey,
+          new anchor.BN(price),
+          "USD",
+          100 // 1% tolerance
+        );
         expect.fail("Expected error");
       } catch (err) {
         const anchorError = err as anchor.AnchorError;
@@ -169,16 +139,12 @@ describe("price", () => {
 
   it("Rejects verification for non-existent currency", async () => {
     try {
-      await program.methods
-        .verifyPriceForTrade(
-          new anchor.BN(100_000),
-          "GBP",
-          100 // 1% tolerance
-        )
-        .accounts({
-          oracle: priceState.publicKey,
-        })
-        .rpc();
+      await priceClient.verifyPriceForTrade(
+        priceState.publicKey,
+        new anchor.BN(100_000),
+        "GBP",
+        100 // 1% tolerance
+      );
       expect.fail("Expected error");
     } catch (err) {
       const anchorError = err as anchor.AnchorError;

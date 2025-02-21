@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use solana_program::msg;
 
-declare_id!("BdQcp74T7QWoXkX9cCndJLgghzannsJX6nfioRaDkZTT");
+declare_id!("BG73i544YBJXTQaHVqCcTo94pnwvMw4euWhk5V9UvQxK");
 
 // Constants for account sizes
 pub const MAX_USERNAME_LENGTH: usize = 32;

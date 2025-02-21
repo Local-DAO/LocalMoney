@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use solana_program::msg;
 
-declare_id!("46gvdsp9gen8qNWdyvqVEXoysayTkXH6G4AMj9DJZiaZ");
+declare_id!("8uzArQW1YiLwh2CLQhMU1Ya774EMEbdbpgux6Tf8z1rn");
 
 #[program]
 pub mod price {
