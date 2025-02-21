@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
+import Header from "@/components/Header";
 import { WalletContextProvider } from "@/components/WalletProvider";
-
-const inter = Inter({ subsets: ["latin"] });
+import { Toaster } from 'react-hot-toast';
 
 export const metadata: Metadata = {
-  title: "LocalMoney Solana",
-  description: "LocalMoney Solana Web Application",
+  title: "Local Money - Solana",
+  description: "Local is a decentralized P2P marketplace for the multi-chain world.",
 };
 
 export default function RootLayout({
@@ -17,9 +16,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body>
         <WalletContextProvider>
-          {children}
+          <Header />
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {children}
+          </main>
+          <Toaster position="bottom-right" />
         </WalletContextProvider>
       </body>
     </html>
