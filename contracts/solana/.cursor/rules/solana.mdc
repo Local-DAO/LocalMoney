@@ -1,6 +1,7 @@
 ---
-description: 
-globs: 
+description: Solana App Development
+globs: *.rs, *.ts, *.tsx, *.js, *.jsx, *.json, *.toml, package.json, *.mdx
+alwaysApply: false
 ---
 
 # Your rule content
