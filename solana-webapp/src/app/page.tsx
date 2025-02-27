@@ -2,12 +2,50 @@
 
 import Link from "next/link";
 import { useWalletStore } from "@/store/useWalletStore";
-import { FC } from "react";
+import { FC, useEffect, useState } from "react";
 import { isPhantomInstalled } from "@/utils/solana";
+import { isLocalnetMode } from "@/utils/localWallets";
+import LocalWalletSelector from "@/components/LocalWalletSelector";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
 export default function Home() {
   const { connected } = useWalletStore();
+  const [isClient, setIsClient] = useState(false);
   const phantomInstalled = isPhantomInstalled();
+  const isLocalnet = isLocalnetMode();
+  const { publicKey, connecting } = useWallet();
+
+  // Set isClient to true when component mounts on client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Don't render wallet-specific content during SSR
+  if (!isClient) {
+    return (
+      <div className="flex flex-col">
+        <section className="bg-background text-foreground py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center">
+              <h1 className="text-4xl font-extrabold sm:text-5xl md:text-6xl">
+                <span className="block">Trade with your peers,</span>
+                <span className="block text-primary">locally.</span>
+              </h1>
+              <p className="mt-6 text-xl text-gray-300 max-w-3xl mx-auto">
+                <span className="text-primary font-semibold">Local</span> is a decentralized P2P marketplace for the crypto multi-chain world.
+              </p>
+              <div className="mt-12">
+                <div className="inline-flex items-center px-5 py-3 border border-primary text-base font-medium rounded-md text-primary bg-transparent">
+                  Loading...
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col">
@@ -22,6 +60,14 @@ export default function Home() {
             <p className="mt-6 text-xl text-gray-300 max-w-3xl mx-auto">
               <span className="text-primary font-semibold">Local</span> is a decentralized P2P marketplace for the crypto multi-chain world.
             </p>
+            
+            {/* Local wallet selector for localnet mode */}
+            {isLocalnet && (
+              <div className="mt-6">
+                <LocalWalletSelector />
+              </div>
+            )}
+            
             <div className="mt-12 flex justify-center">
               {connected ? (
                 <Link
@@ -31,10 +77,16 @@ export default function Home() {
                   Browse Offers
                 </Link>
               ) : (
-                <div className="inline-flex items-center px-5 py-3 border border-primary text-base font-medium rounded-md text-primary bg-transparent hover:bg-primary hover:text-white transition-colors duration-200">
-                  {phantomInstalled
-                    ? "Connect Your Wallet to Get Started"
-                    : "Install Phantom Wallet to Get Started"}
+                <div className="inline-flex items-center">
+                  {isLocalnet ? (
+                    <div className="px-5 py-3 border border-primary text-base font-medium rounded-md text-primary bg-transparent">
+                      Select a local wallet above to get started
+                    </div>
+                  ) : (
+                    <WalletMultiButton className="py-3 px-5 border border-primary text-base font-medium rounded-md bg-primary hover:bg-opacity-90">
+                      {connecting ? "Connecting..." : phantomInstalled ? "Connect Wallet" : "Install Phantom Wallet"}
+                    </WalletMultiButton>
+                  )}
                 </div>
               )}
             </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { FC, ReactNode, useMemo } from 'react';
+import { FC, ReactNode, useEffect, useMemo } from 'react';
 import { 
   ConnectionProvider, 
   WalletProvider as SolanaWalletProvider 
@@ -12,6 +12,7 @@ import {
 } from '@solana/wallet-adapter-wallets';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { clusterApiUrl } from '@solana/web3.js';
+import { isLocalnetMode, useLocalWalletStore } from '@/utils/localWallets';
 
 // Import the wallet adapter CSS
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -21,6 +22,17 @@ interface WalletProviderProps {
 }
 
 export const WalletProvider: FC<WalletProviderProps> = ({ children }) => {
+  // Check if we're in localnet mode
+  const isLocalnet = isLocalnetMode();
+  const { initializeWallets } = useLocalWalletStore();
+
+  // Initialize local wallets if in localnet mode
+  useEffect(() => {
+    if (isLocalnet) {
+      initializeWallets();
+    }
+  }, [isLocalnet, initializeWallets]);
+
   // The network can be set to 'devnet', 'testnet', or 'mainnet-beta'
   const network = process.env.NEXT_PUBLIC_SOLANA_NETWORK as WalletAdapterNetwork || WalletAdapterNetwork.Devnet;
 
@@ -44,7 +56,7 @@ export const WalletProvider: FC<WalletProviderProps> = ({ children }) => {
 
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <SolanaWalletProvider wallets={wallets} autoConnect>
+      <SolanaWalletProvider wallets={wallets} autoConnect={!isLocalnet}>
         <WalletModalProvider>
           {children}
         </WalletModalProvider>

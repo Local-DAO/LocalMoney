@@ -46,6 +46,9 @@ export const formatDate = (date: Date): string => {
  * Check if Phantom is installed
  */
 export const isPhantomInstalled = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
   const phantom = (window as any).phantom;
   return phantom?.solana?.isPhantom || false;
 };
