@@ -9,7 +9,7 @@ use price::{self, PriceState};
 use profile::program::Profile;
 use profile::{self, Profile as ProfileAccount};
 
-declare_id!("437aWt9WrLYquEwJsVe3B3kANP77ZCvn4gs4hJBNLefG");
+declare_id!("6VXLHER2xPndomqaXWPPUH3733HVmcRMUuU5w9eNVqbZ");
 
 #[program]
 pub mod trade {
@@ -194,6 +194,26 @@ pub mod trade {
         msg!("Trade disputed successfully");
         Ok(())
     }
+
+    pub fn deposit_escrow(ctx: Context<DepositEscrow>, amount: u64) -> Result<()> {
+        // Transfer tokens to escrow
+        let transfer_ctx = CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            token::Transfer {
+                from: ctx.accounts.depositor_token_account.to_account_info(),
+                to: ctx.accounts.escrow_account.to_account_info(),
+                authority: ctx.accounts.depositor.to_account_info(),
+            },
+        );
+        token::transfer(transfer_ctx, amount)?;
+
+        // Update trade info if necessary
+        let trade = &mut ctx.accounts.trade;
+        trade.updated_at = Clock::get()?.unix_timestamp;
+
+        msg!("Deposited {} tokens to escrow", amount);
+        Ok(())
+    }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
@@ -341,6 +361,30 @@ pub struct DisputeTrade<'info> {
     #[account(mut)]
     pub trade: Account<'info, Trade>,
     pub disputer: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct DepositEscrow<'info> {
+    #[account(mut)]
+    pub trade: Account<'info, Trade>,
+
+    #[account(
+        mut,
+        constraint = escrow_account.key() == trade.escrow_account
+    )]
+    pub escrow_account: Account<'info, token::TokenAccount>,
+
+    #[account(mut)]
+    pub depositor: Signer<'info>,
+
+    #[account(
+        mut,
+        constraint = depositor_token_account.mint == trade.token_mint,
+        constraint = depositor_token_account.owner == depositor.key()
+    )]
+    pub depositor_token_account: Account<'info, token::TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
 }
 
 #[error_code]

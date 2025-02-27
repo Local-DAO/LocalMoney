@@ -159,6 +159,26 @@ export class TradeClient {
     );
   }
 
+  async depositEscrow(
+    tradePDA: PublicKey,
+    depositor: Keypair,
+    depositorTokenAccount: PublicKey,
+    escrowAccount: PublicKey,
+    amount: BN
+  ): Promise<void> {
+    await this.program.methods
+      .depositEscrow(amount)
+      .accounts({
+        trade: tradePDA,
+        escrowAccount: escrowAccount,
+        depositor: depositor.publicKey,
+        depositorTokenAccount: depositorTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([depositor])
+      .rpc();
+  }
+
   private convertTradeStatus(status: any): TradeStatus {
     if ('open' in status) return TradeStatus.Open;
     if ('inProgress' in status) return TradeStatus.InProgress;

@@ -1,7 +1,7 @@
 import { Program, AnchorProvider, Idl, BN } from '@project-serum/anchor';
 import { Connection, Keypair, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { Offer, OfferStatus } from '../types';
+import { Offer, OfferStatus, OfferType } from '../types';
 
 export class OfferClient {
   private program: Program;
@@ -17,28 +17,29 @@ export class OfferClient {
   }
 
   async createOffer(
-    creator: Keypair,
+    maker: Keypair,
     tokenMint: PublicKey,
     amount: BN,
     pricePerToken: BN,
     minAmount: BN,
-    maxAmount: BN
+    maxAmount: BN,
+    offerType: OfferType
   ): Promise<PublicKey> {
     const [offerPDA] = await PublicKey.findProgramAddress(
-      [Buffer.from("offer"), creator.publicKey.toBuffer()],
+      [Buffer.from("offer"), maker.publicKey.toBuffer()],
       this.program.programId
     );
 
     await this.program.methods
-      .createOffer(amount, pricePerToken, minAmount, maxAmount)
+      .createOffer(amount, pricePerToken, minAmount, maxAmount, { [offerType]: {} })
       .accounts({
         offer: offerPDA,
-        creator: creator.publicKey,
+        maker: maker.publicKey,
         tokenMint,
         systemProgram: SystemProgram.programId,
         rent: SYSVAR_RENT_PUBKEY,
       })
-      .signers([creator])
+      .signers([maker])
       .rpc();
 
     return offerPDA;
@@ -46,7 +47,7 @@ export class OfferClient {
 
   async updateOffer(
     offerPDA: PublicKey,
-    creator: Keypair,
+    maker: Keypair,
     pricePerToken?: BN,
     minAmount?: BN,
     maxAmount?: BN
@@ -55,63 +56,60 @@ export class OfferClient {
       .updateOffer(pricePerToken, minAmount, maxAmount)
       .accounts({
         offer: offerPDA,
-        creator: creator.publicKey,
+        maker: maker.publicKey,
       })
-      .signers([creator])
+      .signers([maker])
       .rpc();
   }
 
   async pauseOffer(
     offerPDA: PublicKey,
-    creator: Keypair
+    maker: Keypair
   ): Promise<void> {
     await this.program.methods
       .pauseOffer()
       .accounts({
         offer: offerPDA,
-        creator: creator.publicKey,
+        maker: maker.publicKey,
       })
-      .signers([creator])
+      .signers([maker])
       .rpc();
   }
 
   async resumeOffer(
     offerPDA: PublicKey,
-    creator: Keypair
+    maker: Keypair
   ): Promise<void> {
     await this.program.methods
       .resumeOffer()
       .accounts({
         offer: offerPDA,
-        creator: creator.publicKey,
+        maker: maker.publicKey,
       })
-      .signers([creator])
+      .signers([maker])
       .rpc();
   }
 
   async closeOffer(
     offerPDA: PublicKey,
-    creator: Keypair
+    maker: Keypair
   ): Promise<void> {
     await this.program.methods
       .closeOffer()
       .accounts({
         offer: offerPDA,
-        creator: creator.publicKey,
+        maker: maker.publicKey,
       })
-      .signers([creator])
+      .signers([maker])
       .rpc();
   }
 
   async takeOffer(
     offerPDA: PublicKey,
-    creator: Keypair,
+    maker: PublicKey,
     tokenMint: PublicKey,
-    sellerTokenAccount: PublicKey,
-    escrowAccount: PublicKey,
     tradePDA: PublicKey,
-    buyer: Keypair,
-    buyerTokenAccount: PublicKey,
+    taker: Keypair,
     tradeProgram: PublicKey,
     amount: BN
   ): Promise<void> {
@@ -119,40 +117,53 @@ export class OfferClient {
       .takeOffer(amount)
       .accounts({
         offer: offerPDA,
-        creator: creator.publicKey,
+        maker,
         tokenMint,
-        sellerTokenAccount,
-        escrowAccount,
         trade: tradePDA,
-        buyer: buyer.publicKey,
-        buyerTokenAccount,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-        rent: SYSVAR_RENT_PUBKEY,
+        taker: taker.publicKey,
         tradeProgram,
       })
-      .signers([creator, buyer])
+      .signers([taker])
+      .rpc();
+  }
+
+  async depositEscrow(
+    offerPDA: PublicKey,
+    tradePDA: PublicKey,
+    depositor: Keypair,
+    tradeProgram: PublicKey
+  ): Promise<void> {
+    await this.program.methods
+      .depositEscrow()
+      .accounts({
+        offer: offerPDA,
+        trade: tradePDA,
+        depositor: depositor.publicKey,
+        tradeProgram,
+      })
+      .signers([depositor])
       .rpc();
   }
 
   async getOffer(offerPDA: PublicKey): Promise<Offer> {
     const account = await this.program.account.offer.fetch(offerPDA);
     return {
-      creator: account.creator,
+      maker: account.maker,
       tokenMint: account.tokenMint,
       amount: account.amount,
       pricePerToken: account.pricePerToken,
       minAmount: account.minAmount,
       maxAmount: account.maxAmount,
+      offerType: this.convertOfferType(account.offerType),
       status: this.convertOfferStatus(account.status),
       createdAt: account.createdAt.toNumber(),
       updatedAt: account.updatedAt.toNumber(),
     };
   }
 
-  async findOfferAddress(creator: PublicKey): Promise<[PublicKey, number]> {
+  async findOfferAddress(maker: PublicKey): Promise<[PublicKey, number]> {
     return await PublicKey.findProgramAddress(
-      [Buffer.from("offer"), creator.toBuffer()],
+      [Buffer.from("offer"), maker.toBuffer()],
       this.program.programId
     );
   }
@@ -162,5 +173,11 @@ export class OfferClient {
     if ('paused' in status) return OfferStatus.Paused;
     if ('closed' in status) return OfferStatus.Closed;
     throw new Error('Unknown offer status');
+  }
+
+  private convertOfferType(type: any): OfferType {
+    if ('buy' in type) return OfferType.Buy;
+    if ('sell' in type) return OfferType.Sell;
+    throw new Error('Unknown offer type');
   }
 } 

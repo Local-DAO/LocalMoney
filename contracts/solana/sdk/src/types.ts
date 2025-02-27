@@ -26,6 +26,11 @@ export enum OfferStatus {
   Closed = 'closed'
 }
 
+export enum OfferType {
+  Buy = 'buy',
+  Sell = 'sell'
+}
+
 export interface Profile {
   owner: PublicKey;
   username: string;
@@ -51,12 +56,13 @@ export interface Trade {
 }
 
 export interface Offer {
-  creator: PublicKey;
+  maker: PublicKey;
   tokenMint: PublicKey;
   amount: BN;
   pricePerToken: BN;
   minAmount: BN;
   maxAmount: BN;
+  offerType: OfferType;
   status: OfferStatus;
   createdAt: number;
   updatedAt: number;
