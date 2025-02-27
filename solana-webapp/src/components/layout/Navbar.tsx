@@ -12,20 +12,19 @@ export const Navbar: FC = () => {
   const { connected, balance, balanceLoading } = useWalletStore();
 
   const navLinks = [
-    { name: 'Home', href: '/' },
-    { name: 'Profile', href: '/profile' },
-    { name: 'Offers', href: '/offers' },
-    { name: 'Trades', href: '/trades' },
+    { name: 'My Trades', href: '/trades' },
   ];
 
   return (
-    <nav className="bg-gray-900 text-white shadow-md">
+    <nav className="bg-background text-foreground shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
-              <Link href="/" className="text-xl font-bold">
-                LocalMoney
+              <Link href="/" className="text-xl font-bold flex items-center">
+                <img src="/logo.svg" alt="LocalMoney Logo" className="h-8 w-8 mr-2" />
+                <span className="text-primary">Local Money</span>
+                <span className="ml-4 text-xs bg-secondary px-2 py-1 rounded text-gray-400">Mainnet</span>
               </Link>
             </div>
             <div className="ml-10 flex items-center space-x-4">
@@ -35,8 +34,8 @@ export const Navbar: FC = () => {
                   href={link.href}
                   className={`px-3 py-2 rounded-md text-sm font-medium ${
                     pathname === link.href
-                      ? 'bg-gray-700 text-white'
-                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                      ? 'text-primary border-b-2 border-primary'
+                      : 'text-gray-300 hover:text-primary'
                   }`}
                 >
                   {link.name}

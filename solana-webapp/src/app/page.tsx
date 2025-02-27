@@ -12,31 +12,80 @@ export default function Home() {
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
-      <section className="bg-gray-900 text-white py-16">
+      <section className="bg-background text-foreground py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h1 className="text-4xl font-extrabold sm:text-5xl md:text-6xl">
-              <span className="block">LocalMoney</span>
-              <span className="block text-indigo-400">P2P Trading on Solana</span>
+              <span className="block">Trade with your peers,</span>
+              <span className="block text-primary">locally.</span>
             </h1>
-            <p className="mt-4 text-xl text-gray-300 max-w-3xl mx-auto">
-              Secure, fast, and decentralized peer-to-peer trading platform built on the Solana blockchain.
+            <p className="mt-6 text-xl text-gray-300 max-w-3xl mx-auto">
+              <span className="text-primary font-semibold">Local</span> is a decentralized P2P marketplace for the crypto multi-chain world.
             </p>
-            <div className="mt-8 flex justify-center">
+            <div className="mt-12 flex justify-center">
               {connected ? (
                 <Link
                   href="/offers"
-                  className="inline-flex items-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+                  className="inline-flex items-center px-5 py-3 border border-primary text-base font-medium rounded-md text-white bg-primary hover:bg-opacity-90"
                 >
                   Browse Offers
                 </Link>
               ) : (
-                <div className="inline-flex items-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600">
+                <div className="inline-flex items-center px-5 py-3 border border-primary text-base font-medium rounded-md text-primary bg-transparent hover:bg-primary hover:text-white transition-colors duration-200">
                   {phantomInstalled
                     ? "Connect Your Wallet to Get Started"
                     : "Install Phantom Wallet to Get Started"}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Top offers section */}
+      <section className="py-12 bg-background">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-foreground">
+              Top offers from the community
+            </h2>
+          </div>
+
+          <div className="flex flex-col gap-6">
+            {/* Crypto selection */}
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-400">Crypto</div>
+              <div className="flex">
+                <button className="px-4 py-2 bg-primary text-white rounded-l-md">buy</button>
+                <button className="px-4 py-2 bg-secondary text-gray-400 rounded-r-md">sell</button>
+              </div>
+              <div className="px-4 py-2 bg-secondary text-gray-300 rounded-md flex items-center">
+                <span className="mr-2">USK</span>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Currency selection */}
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-400">Currency (FIAT)</div>
+              <div className="px-4 py-2 bg-secondary text-gray-300 rounded-md flex items-center">
+                <span className="mr-2">🇺🇸 USD</span>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* List of sellers */}
+          <div className="mt-12">
+            <h3 className="text-xl font-bold text-foreground mb-4">
+              Buy from these sellers
+            </h3>
+            <div className="bg-secondary rounded-lg p-6 text-center text-gray-400">
+              Failed to fetch
             </div>
           </div>
         </div>
@@ -136,10 +185,10 @@ interface FeatureCardProps {
 
 const FeatureCard: FC<FeatureCardProps> = ({ title, description, icon }) => {
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <div className="mb-4">{icon}</div>
-      <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
-      <p className="text-gray-600">{description}</p>
+    <div className="bg-secondary p-6 rounded-lg">
+      <div className="mb-4 text-primary">{icon}</div>
+      <h3 className="text-xl font-bold text-foreground mb-2">{title}</h3>
+      <p className="text-gray-400">{description}</p>
     </div>
   );
 };
@@ -153,11 +202,11 @@ interface StepCardProps {
 const StepCard: FC<StepCardProps> = ({ number, title, description }) => {
   return (
     <div className="relative">
-      <div className="bg-indigo-500 text-white rounded-full w-10 h-10 flex items-center justify-center mb-4 font-bold">
+      <div className="bg-primary text-white rounded-full w-10 h-10 flex items-center justify-center mb-4 font-bold">
         {number}
       </div>
-      <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
-      <p className="text-gray-600">{description}</p>
+      <h3 className="text-xl font-bold text-foreground mb-2">{title}</h3>
+      <p className="text-gray-400">{description}</p>
     </div>
   );
 };

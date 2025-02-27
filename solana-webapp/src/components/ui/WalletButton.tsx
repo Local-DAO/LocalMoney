@@ -56,7 +56,16 @@ export const WalletButton: FC = () => {
     return null; // Prevent hydration errors
   }
 
-  return <WalletMultiButton className="wallet-button" />;
+  return (
+    <WalletMultiButton 
+      className="bg-transparent hover:bg-primary hover:bg-opacity-90 text-primary hover:text-white border border-primary rounded-md px-4 py-2 transition-colors duration-200"
+      style={{
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '14px',
+        fontWeight: '600',
+      }}
+    />
+  );
 };
 
 export default WalletButton; 
