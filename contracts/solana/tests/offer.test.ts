@@ -365,7 +365,6 @@ describe("offer", () => {
       expect.fail("Expected error was not thrown");
     } catch (error: any) {
       // The error is related to the trade account rather than InvalidStatus
-      console.log("Error message:", error.toString());
       // Just check that an error was thrown without specifying the exact message
       expect(true).to.be.true;
     }
@@ -553,7 +552,6 @@ describe("offer", () => {
       );
       expect.fail("Expected error was not thrown");
     } catch (error: any) {
-      console.log("Error message:", error.toString());
       // The actual error is AccountNotInitialized for the trade account
       expect(error.toString()).to.include("AccountNotInitialized");
     }
@@ -563,7 +561,6 @@ describe("offer", () => {
       await offerClient.pauseOffer(offerPDA, creator);
       expect.fail("Expected error was not thrown");
     } catch (error: any) {
-      console.log("Error message:", error.toString());
       // This should be InvalidStatus
       expect(error.toString()).to.include("InvalidStatus");
     }
@@ -585,7 +582,6 @@ describe("offer", () => {
       );
       expect.fail("Expected error was not thrown");
     } catch (error: any) {
-      console.log("Error message:", error.toString());
       // The actual error is AccountNotInitialized for the trade account
       expect(error.toString()).to.include("AccountNotInitialized");
     }
