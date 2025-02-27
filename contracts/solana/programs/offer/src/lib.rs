@@ -12,7 +12,7 @@ pub mod offer {
     pub fn create_offer(
         ctx: Context<CreateOffer>,
         amount: u64,
-        price_per_token: u64,
+        price_per_token: u64, //TODO: instead of price per token, we should use a pct price based of the Price Oracle price of this token
         min_amount: u64,
         max_amount: u64,
         offer_type: OfferType,
@@ -132,15 +132,6 @@ pub mod offer {
         offer.updated_at = Clock::get()?.unix_timestamp;
 
         msg!("Offer taken successfully for {} tokens", amount);
-        Ok(())
-    }
-
-    pub fn deposit_escrow(_ctx: Context<DepositEscrow>) -> Result<()> {
-        // This function is intentionally left empty as token operations
-        // are moved to the trade program. This function serves as a placeholder
-        // for the trade program to handle token operations through CPIs.
-
-        msg!("Escrow deposit request processed. Token operations to be handled by Trade program.");
         Ok(())
     }
 }
