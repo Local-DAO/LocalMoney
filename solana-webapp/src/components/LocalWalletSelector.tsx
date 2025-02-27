@@ -1,67 +1,52 @@
 'use client';
 
-import { FC, useEffect } from 'react';
-import { shortenAddress } from '@/utils/solana';
-import { useLocalWalletStore, LocalWalletType } from '@/utils/localWallets';
-import { useWalletStore } from '@/store/useWalletStore';
-import toast from 'react-hot-toast';
+import { FC, useEffect, useState } from 'react';
+import { useLocalWalletStore } from '@/utils/localWallets';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { truncateAddress } from '@/utils/format';
 
-export const LocalWalletSelector: FC = () => {
-  const { wallets, selectedWallet, selectWallet, isLocalnetMode } = useLocalWalletStore();
-  const { setPublicKey, setConnected, setConnectedAt } = useWalletStore();
-  
-  // Update the wallet store when a local wallet is selected
+const LocalWalletSelector: FC = () => {
+  const { wallets, selectWallet, getSelectedWallet, isLocalnetMode } = useLocalWalletStore();
+  const { connected, publicKey, disconnect } = useWallet();
+  const [selectedWallet, setSelectedWallet] = useState(getSelectedWallet());
+
+  // Update the selected wallet when it changes in the store
   useEffect(() => {
-    if (selectedWallet) {
-      setPublicKey(selectedWallet.keypair.publicKey);
-      setConnected(true);
-      setConnectedAt(new Date());
-      toast.success(`Connected as ${selectedWallet.label}`);
-    } else {
-      setPublicKey(null);
-      setConnected(false);
-      setConnectedAt(null);
-    }
-  }, [selectedWallet, setPublicKey, setConnected, setConnectedAt]);
-  
-  // If not in localnet mode, don't render this component
+    setSelectedWallet(getSelectedWallet());
+  }, [getSelectedWallet]);
+
+  // If not in localnet mode, don't render anything
   if (!isLocalnetMode) {
     return null;
   }
-  
-  const handleSelectWallet = (type: LocalWalletType) => {
+
+  const handleSelectWallet = (type: 'maker' | 'taker') => {
+    // If connected to a standard wallet, disconnect first
+    if (connected && publicKey) {
+      disconnect();
+    }
+    
     selectWallet(type);
+    setSelectedWallet(getSelectedWallet());
   };
-  
+
   return (
-    <div className="mb-4 bg-secondary p-4 rounded-lg">
-      <h2 className="text-lg font-medium text-foreground mb-2">Local Wallet Selector</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {wallets.map((wallet) => (
-          <button
-            key={wallet.type}
-            onClick={() => handleSelectWallet(wallet.type)}
-            className={`p-3 rounded-md ${
-              selectedWallet?.type === wallet.type
-                ? 'bg-primary text-white'
-                : 'bg-secondary-dark hover:bg-secondary-light text-gray-200'
-            }`}
-          >
-            <div className="flex flex-col items-start">
-              <span className="font-medium">{wallet.label}</span>
-              <span className="text-xs opacity-80">
-                {shortenAddress(wallet.keypair.publicKey.toString())}
-              </span>
-            </div>
-          </button>
-        ))}
+    <div className="flex items-center space-x-2">
+      <span className="text-sm font-medium text-gray-700">Local Wallet:</span>
+      <div className="relative">
+        <select
+          className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+          value={selectedWallet?.type || ''}
+          onChange={(e) => handleSelectWallet(e.target.value as 'maker' | 'taker')}
+        >
+          <option value="" disabled>Select wallet</option>
+          {wallets.map((wallet) => (
+            <option key={wallet.type} value={wallet.type}>
+              {wallet.label} ({truncateAddress(wallet.keypair.publicKey.toString())})
+            </option>
+          ))}
+        </select>
       </div>
-      
-      {selectedWallet && (
-        <div className="mt-3 p-2 bg-secondary-light rounded text-xs text-gray-300">
-          <p>Public Key: {selectedWallet.keypair.publicKey.toString()}</p>
-        </div>
-      )}
     </div>
   );
 };

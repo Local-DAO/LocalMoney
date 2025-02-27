@@ -13,7 +13,7 @@ export default function Home() {
   const { connected } = useWalletStore();
   const [isClient, setIsClient] = useState(false);
   const phantomInstalled = isPhantomInstalled();
-  const isLocalnet = isLocalnetMode();
+  const isLocalnet = isLocalnetMode;
   const { publicKey, connecting } = useWallet();
 
   // Set isClient to true when component mounts on client side

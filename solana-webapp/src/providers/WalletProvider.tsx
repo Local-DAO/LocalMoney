@@ -1,6 +1,6 @@
 'use client';
 
-import { FC, ReactNode, useEffect, useMemo } from 'react';
+import { FC, ReactNode, useEffect, useMemo, useState } from 'react';
 import { 
   ConnectionProvider, 
   WalletProvider as SolanaWalletProvider 
@@ -13,6 +13,8 @@ import {
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { clusterApiUrl } from '@solana/web3.js';
 import { isLocalnetMode, useLocalWalletStore } from '@/utils/localWallets';
+import { LocalWalletAdapter } from '@/utils/LocalWalletAdapter';
+import LocalWalletModal from '@/components/LocalWalletModal';
 
 // Import the wallet adapter CSS
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -23,13 +25,15 @@ interface WalletProviderProps {
 
 export const WalletProvider: FC<WalletProviderProps> = ({ children }) => {
   // Check if we're in localnet mode
-  const isLocalnet = isLocalnetMode();
-  const { initializeWallets } = useLocalWalletStore();
+  const isLocalnet = isLocalnetMode;
+  const { initializeWallets, wallets: localWallets } = useLocalWalletStore();
+  const [isCustomModalReady, setIsCustomModalReady] = useState(false);
 
   // Initialize local wallets if in localnet mode
   useEffect(() => {
     if (isLocalnet) {
       initializeWallets();
+      setIsCustomModalReady(true);
     }
   }, [isLocalnet, initializeWallets]);
 
@@ -46,19 +50,33 @@ export const WalletProvider: FC<WalletProviderProps> = ({ children }) => {
 
   // @solana/wallet-adapter-wallets includes all the adapters but supports tree shaking --
   // Only the wallets you configure here will be compiled into your application
-  const wallets = useMemo(
-    () => [
+  const wallets = useMemo(() => {
+    const standardWallets = [
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter()
-    ],
-    [network]
-  );
+    ];
+    
+    // Add local wallet adapters if in localnet mode
+    if (isLocalnet && localWallets.length > 0) {
+      const localWalletAdapters = localWallets.map(
+        wallet => new LocalWalletAdapter({ localWallet: wallet })
+      );
+      return [...standardWallets, ...localWalletAdapters];
+    }
+    
+    return standardWallets;
+  }, [network, isLocalnet, localWallets]);
+
+  if (isLocalnet && !isCustomModalReady) {
+    return <div>Loading wallet provider...</div>;
+  }
 
   return (
     <ConnectionProvider endpoint={endpoint}>
       <SolanaWalletProvider wallets={wallets} autoConnect={!isLocalnet}>
         <WalletModalProvider>
           {children}
+          {isLocalnet && <LocalWalletModal />}
         </WalletModalProvider>
       </SolanaWalletProvider>
     </ConnectionProvider>

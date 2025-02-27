@@ -5,25 +5,48 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useWalletStore } from '@/store/useWalletStore';
 import { getSOLBalance } from '@/utils/solana';
-import { shortenAddress } from '@/utils/solana';
+import { truncateAddress } from '@/utils/format';
+import { useLocalWalletStore } from '@/utils/localWallets';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 
 export const WalletButton: FC = () => {
-  const { publicKey, connected, connecting, connection } = useWallet();
+  const { publicKey, connected, connecting, connection, disconnect } = useWallet();
   const walletStore = useWalletStore();
+  const { getSelectedWallet, isLocalnetMode } = useLocalWalletStore();
+  const { setVisible } = useWalletModal();
   const [isClient, setIsClient] = useState(false);
+  const isLocalnet = isLocalnetMode;
+  const selectedLocalWallet = isLocalnet ? getSelectedWallet() : null;
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
+  // Update wallet store with connected wallet info
   useEffect(() => {
-    if (publicKey !== walletStore.publicKey) {
-      walletStore.setPublicKey(publicKey);
+    // If we're in localnet mode and have a selected local wallet, use that
+    const effectivePublicKey = isLocalnet && selectedLocalWallet 
+      ? selectedLocalWallet.keypair.publicKey 
+      : publicKey;
+    
+    const effectiveConnected = isLocalnet 
+      ? !!selectedLocalWallet 
+      : connected;
+
+    // Add deep equality check to prevent infinite updates
+    const currentPublicKey = walletStore.publicKey;
+    const publicKeysEqual = 
+      (effectivePublicKey && currentPublicKey && 
+       effectivePublicKey.toBase58() === currentPublicKey.toBase58()) || 
+      (effectivePublicKey === null && currentPublicKey === null);
+      
+    if (!publicKeysEqual) {
+      walletStore.setPublicKey(effectivePublicKey);
     }
     
-    if (connected !== walletStore.connected) {
-      walletStore.setConnected(connected);
-      if (connected) {
+    if (effectiveConnected !== walletStore.connected) {
+      walletStore.setConnected(effectiveConnected);
+      if (effectiveConnected) {
         walletStore.setConnectedAt(new Date());
       } else {
         walletStore.setConnectedAt(null);
@@ -33,29 +56,76 @@ export const WalletButton: FC = () => {
     if (connecting !== walletStore.connecting) {
       walletStore.setConnecting(connecting);
     }
-  }, [publicKey, connected, connecting, walletStore]);
+  }, [publicKey, connected, connecting, walletStore, isLocalnet, selectedLocalWallet]);
 
   // Fetch balance when connected
   useEffect(() => {
-    if (connection && publicKey && connected) {
+    if (!connection) return;
+    
+    const effectivePublicKey = isLocalnet && selectedLocalWallet 
+      ? selectedLocalWallet.keypair.publicKey 
+      : publicKey;
+    
+    const effectiveConnected = isLocalnet 
+      ? !!selectedLocalWallet 
+      : connected;
+      
+    if (effectivePublicKey && effectiveConnected) {
       const fetchBalance = async () => {
-        walletStore.setBalanceLoading(true);
-        const balance = await getSOLBalance(connection, publicKey);
-        walletStore.setBalance(balance);
-        walletStore.setBalanceLoading(false);
+        try {
+          walletStore.setBalanceLoading(true);
+          const balance = await getSOLBalance(connection, effectivePublicKey);
+          walletStore.setBalance(balance);
+          walletStore.setBalanceLoading(false);
+        } catch (error) {
+          console.error('Error fetching balance:', error);
+          walletStore.setBalanceLoading(false);
+        }
       };
 
       fetchBalance();
       // Refresh balance every 30 seconds
       const interval = setInterval(fetchBalance, 30000);
       return () => clearInterval(interval);
+    } else {
+      // Reset balance state when disconnected
+      if (walletStore.balance !== 0) {
+        walletStore.setBalance(0);
+      }
+      if (walletStore.balanceLoading) {
+        walletStore.setBalanceLoading(false);
+      }
     }
-  }, [connection, publicKey, connected, walletStore]);
+  }, [connection, publicKey, connected, walletStore, isLocalnet, selectedLocalWallet]);
+
+  const handleClick = () => {
+    if (isLocalnet) {
+      setVisible(true);
+    }
+  };
 
   if (!isClient) {
     return null; // Prevent hydration errors
   }
 
+  // If we're in localnet mode and have a selected local wallet, show a custom button
+  if (isLocalnet && selectedLocalWallet) {
+    return (
+      <button
+        onClick={handleClick}
+        className="bg-transparent hover:bg-primary hover:bg-opacity-90 text-primary hover:text-white border border-primary rounded-md px-4 py-2 transition-colors duration-200"
+        style={{
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '14px',
+          fontWeight: '600',
+        }}
+      >
+        {truncateAddress(selectedLocalWallet.keypair.publicKey.toString())}
+      </button>
+    );
+  }
+
+  // Otherwise, use the standard WalletMultiButton
   return (
     <WalletMultiButton 
       className="bg-transparent hover:bg-primary hover:bg-opacity-90 text-primary hover:text-white border border-primary rounded-md px-4 py-2 transition-colors duration-200"

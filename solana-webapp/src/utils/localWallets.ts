@@ -83,6 +83,4 @@ export const useLocalWalletStore = create<LocalWalletState>((set, get) => ({
 }));
 
 // Helper to check if we're in localnet mode
-export const isLocalnetMode = (): boolean => {
-  return process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'localnet';
-}; 
+export const isLocalnetMode = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'localnet'; 

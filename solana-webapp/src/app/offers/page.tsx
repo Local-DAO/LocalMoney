@@ -3,6 +3,9 @@
 import { FC, useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import toast from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
+import { getAllOffers } from '@/utils/offerService';
+import { useLocalWalletStore } from '@/utils/localWallets';
 
 interface Offer {
   id: string;
@@ -16,7 +19,9 @@ interface Offer {
 }
 
 export default function Offers() {
-  const { publicKey, connected, connection } = useWallet();
+  const router = useRouter();
+  const { publicKey, connected, connection, signTransaction } = useWallet();
+  const { getSelectedWallet, isLocalnetMode } = useLocalWalletStore();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -29,49 +34,41 @@ export default function Offers() {
     try {
       setIsLoading(true);
       
-      // Here you would use your SDK to fetch offers
-      // For example:
-      // const offerClient = new OfferClient(connection);
-      // const offers = await offerClient.getAllOffers();
+      // Get the wallet to use
+      let wallet;
+      let effectiveConnection = connection;
       
-      // For now, we'll mock some example offers
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (isLocalnetMode) {
+        // Use the selected local wallet
+        const selectedWallet = getSelectedWallet();
+        if (selectedWallet) {
+          wallet = {
+            publicKey: selectedWallet.keypair.publicKey,
+            keypair: selectedWallet.keypair
+          };
+        }
+        
+        // For localnet mode, we need to create our own connection if the one from useWallet isn't available
+        if (!effectiveConnection) {
+          console.warn('Connection not available from useWallet, creating a new one');
+          const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'http://localhost:8899';
+          const { Connection } = require('@solana/web3.js');
+          effectiveConnection = new Connection(rpcUrl, 'confirmed');
+        }
+      } else if (publicKey) {
+        wallet = {
+          publicKey,
+          signTransaction
+        };
+      }
       
-      // Mock data
-      const mockOffers: Offer[] = [
-        {
-          id: '1',
-          creator: 'Alice',
-          amount: 5,
-          price: 100,
-          currency: 'USD',
-          paymentMethods: ['Bank Transfer', 'PayPal'],
-          isBuy: false,
-          createdAt: new Date(Date.now() - 86400000) // 1 day ago
-        },
-        {
-          id: '2',
-          creator: 'Bob',
-          amount: 2.5,
-          price: 105,
-          currency: 'EUR',
-          paymentMethods: ['Cash Deposit', 'Revolut'],
-          isBuy: true,
-          createdAt: new Date(Date.now() - 43200000) // 12 hours ago
-        },
-        {
-          id: '3',
-          creator: 'Charlie',
-          amount: 10,
-          price: 98.5,
-          currency: 'USD',
-          paymentMethods: ['Zelle', 'Venmo'],
-          isBuy: false,
-          createdAt: new Date(Date.now() - 7200000) // 2 hours ago
-        },
-      ];
+      // Use the offer service to fetch offers
+      const fetchedOffers = await getAllOffers(
+        effectiveConnection,
+        wallet
+      );
       
-      setOffers(mockOffers);
+      setOffers(fetchedOffers);
     } catch (error) {
       console.error('Error loading offers:', error);
       toast.error('Failed to load offers');
@@ -81,12 +78,13 @@ export default function Offers() {
   };
 
   const handleCreateOffer = () => {
-    if (!connected) {
+    if (!connected && !isLocalnetMode) {
       toast.error('Please connect your wallet first');
       return;
     }
     
-    toast.success('Create offer feature coming soon!');
+    // Navigate to the create offer page
+    router.push('/offers/create');
   };
 
   const formatDate = (date: Date) => {
@@ -124,8 +122,27 @@ export default function Offers() {
           <svg className="h-12 w-12 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <p className="text-gray-500 mb-2">No offers found.</p>
-          <p className="text-gray-500">Be the first to create an offer!</p>
+          <p className="text-gray-700 font-medium mb-2">No offers found</p>
+          <p className="text-gray-500 mb-2">
+            The getAllOffers method is not yet implemented in the SDK.
+          </p>
+          <div className="mt-4 px-6">
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-yellow-700">
+                    Developer Note: You need to implement the <code className="bg-yellow-100 px-1 rounded">getAllOffers</code> method
+                    in the OfferClient class to fetch and display real offers.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="overflow-x-auto bg-white shadow rounded-lg">
