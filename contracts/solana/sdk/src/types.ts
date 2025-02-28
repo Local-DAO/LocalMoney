@@ -13,6 +13,7 @@ export interface PriceRoute {
 }
 
 export enum TradeStatus {
+  Created = 'created',
   Open = 'open',
   InProgress = 'inProgress',
   Completed = 'completed',

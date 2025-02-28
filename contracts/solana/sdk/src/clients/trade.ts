@@ -180,6 +180,7 @@ export class TradeClient {
   }
 
   private convertTradeStatus(status: any): TradeStatus {
+    if ('created' in status) return TradeStatus.Created;
     if ('open' in status) return TradeStatus.Open;
     if ('inProgress' in status) return TradeStatus.InProgress;
     if ('completed' in status) return TradeStatus.Completed;

@@ -193,10 +193,8 @@ export default function ViewOffer() {
 
     if (!offer) return;
     
-    // Check if trades/create route exists, otherwise show a toast message
-    toast.success(`Trade with ${offer.creator.substring(0, 8)}... feature coming soon!`);
-    // Uncomment when trade feature is implemented
-    // router.push(`/trades/create?offerId=${offer.id}`);
+    // Navigate to the trade creation page with the offer ID
+    router.push(`/trades/create?offerId=${offer.id}`);
   };
 
   const handleEditClick = () => {

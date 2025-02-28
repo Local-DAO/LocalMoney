@@ -2,109 +2,127 @@
 
 import { FC, useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { getUserTrades } from '@/utils/tradeService';
+import { useLocalWalletStore } from '@/utils/localWallets';
+import { TradeStatus } from '@localmoney/solana-sdk';
 
 interface Trade {
   id: string;
-  offerId: string;
-  buyer: string;
+  buyer: string | null;
   seller: string;
   amount: number;
   price: number;
-  currency: string;
-  status: 'initiated' | 'paid' | 'completed' | 'disputed' | 'cancelled';
+  status: TradeStatus;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export default function Trades() {
-  const { publicKey, connected, connection } = useWallet();
+  const router = useRouter();
+  const { publicKey, connected } = useWallet();
+  const { getSelectedWallet, isLocalnetMode } = useLocalWalletStore();
+  
   const [trades, setTrades] = useState<Trade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [connection, setConnection] = useState<Connection | null>(null);
+
+  useEffect(() => {
+    // Set up connection when component mounts
+    const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'http://localhost:8899';
+    setConnection(new Connection(rpcUrl, 'confirmed'));
+  }, []);
 
   useEffect(() => {
     // Load trades when component mounts or wallet connects
-    if (connected) {
+    if (connection && (connected || isLocalnetMode)) {
       loadTrades();
-    } else {
+    } else if (!connected && !isLocalnetMode) {
       setTrades([]);
       setIsLoading(false);
     }
-  }, [connected, connection]);
+  }, [connected, connection, isLocalnetMode]);
 
   const loadTrades = async () => {
     try {
       setIsLoading(true);
       
-      // Here you would use your SDK to fetch trades
-      // For example:
-      // const tradeClient = new TradeClient(connection, publicKey);
-      // const trades = await tradeClient.getMyTrades();
+      if (!connection) {
+        toast.error('Solana connection not available');
+        return;
+      }
       
-      // For now, we'll mock some example trades
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Get the wallet to use
+      let wallet;
       
-      // Mock data
-      const mockTrades: Trade[] = [
-        {
-          id: '1',
-          offerId: 'offer-1',
-          buyer: 'You',
-          seller: 'Alice',
-          amount: 1.5,
-          price: 100,
-          currency: 'USD',
-          status: 'completed',
-          createdAt: new Date(Date.now() - 86400000 * 3), // 3 days ago
-          updatedAt: new Date(Date.now() - 86400000 * 2), // 2 days ago
-        },
-        {
-          id: '2',
-          offerId: 'offer-2',
-          buyer: 'Bob',
-          seller: 'You',
-          amount: 0.5,
-          price: 105,
-          currency: 'EUR',
-          status: 'initiated',
-          createdAt: new Date(Date.now() - 43200000), // 12 hours ago
-          updatedAt: new Date(Date.now() - 43200000), // 12 hours ago
-        },
-        {
-          id: '3',
-          offerId: 'offer-3',
-          buyer: 'You',
-          seller: 'Charlie',
-          amount: 2.0,
-          price: 98.5,
-          currency: 'USD',
-          status: 'paid',
-          createdAt: new Date(Date.now() - 7200000), // 2 hours ago
-          updatedAt: new Date(Date.now() - 3600000), // 1 hour ago
-        },
-      ];
+      if (isLocalnetMode) {
+        // Use the selected local wallet
+        const selectedWallet = getSelectedWallet();
+        if (selectedWallet) {
+          wallet = {
+            publicKey: selectedWallet.keypair.publicKey,
+            keypair: selectedWallet.keypair
+          };
+        } else {
+          toast.error('Please select a local wallet');
+          setIsLoading(false);
+          return;
+        }
+      } else if (publicKey) {
+        wallet = {
+          publicKey
+        };
+      } else {
+        toast.error('Please connect your wallet');
+        setIsLoading(false);
+        return;
+      }
       
-      setTrades(mockTrades);
-    } catch (error) {
+      // Fetch the user's trades
+      const userTrades = await getUserTrades(connection, wallet);
+      setTrades(userTrades);
+    } catch (error: any) {
       console.error('Error loading trades:', error);
-      toast.error('Failed to load trades');
+      toast.error(error.message || 'Failed to load trades');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const getStatusBadgeClass = (status: Trade['status']) => {
+  const getStatusBadgeClass = (status: TradeStatus) => {
     switch (status) {
-      case 'initiated':
+      case TradeStatus.Open:
         return 'bg-blue-100 text-blue-800';
-      case 'paid':
+      case TradeStatus.InProgress:
         return 'bg-yellow-100 text-yellow-800';
-      case 'completed':
+      case TradeStatus.Completed:
         return 'bg-green-100 text-green-800';
-      case 'disputed':
+      case TradeStatus.Disputed:
         return 'bg-red-100 text-red-800';
-      case 'cancelled':
+      case TradeStatus.Cancelled:
         return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+  
+  const getStatusText = (status: TradeStatus) => {
+    switch (status) {
+      case TradeStatus.Open:
+        return 'Open';
+      case TradeStatus.InProgress:
+        return 'In Progress';
+      case TradeStatus.Completed:
+        return 'Completed';
+      case TradeStatus.Cancelled:
+        return 'Cancelled';
+      case TradeStatus.Disputed:
+        return 'Disputed';
+      default:
+        return 'Unknown';
     }
   };
 
@@ -118,16 +136,29 @@ export default function Trades() {
     });
   };
 
-  const handleTradeAction = (trade: Trade, action: string) => {
-    if (!connected) {
-      toast.error('Please connect your wallet first');
-      return;
-    }
-    
-    toast.success(`${action} on trade ${trade.id} feature coming soon!`);
+  const handleViewTrade = (id: string) => {
+    router.push(`/trades/${id}`);
   };
 
-  if (!connected) {
+  const getUserRole = (trade: Trade) => {
+    if (!publicKey && !isLocalnetMode) return 'Unknown';
+    
+    let userAddress: string;
+    
+    if (isLocalnetMode) {
+      const selectedWallet = getSelectedWallet();
+      if (!selectedWallet) return 'Unknown';
+      userAddress = selectedWallet.keypair.publicKey.toString();
+    } else {
+      userAddress = publicKey!.toString();
+    }
+    
+    if (trade.buyer === userAddress) return 'Buyer';
+    if (trade.seller === userAddress) return 'Seller';
+    return 'Unknown';
+  };
+
+  if (!connected && !isLocalnetMode) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <h1 className="text-3xl font-bold mb-8">Trades</h1>
@@ -151,7 +182,15 @@ export default function Trades() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <h1 className="text-3xl font-bold mb-8">Your Trades</h1>
+      <div className="mb-8 flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Your Trades</h1>
+        <Link
+          href="/offers"
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
+          Find Offers
+        </Link>
+      </div>
       
       {isLoading ? (
         <div className="text-center py-12">
@@ -201,44 +240,28 @@ export default function Trades() {
               {trades.map((trade) => (
                 <tr key={trade.id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {trade.id}
+                    {trade.id.substring(0, 8)}...
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {trade.buyer === 'You' ? 'Buyer' : 'Seller'}
+                    {getUserRole(trade)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {trade.amount} SOL
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {trade.price} {trade.currency}
+                    {trade.price} USD
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(trade.status)}`}>
-                      {trade.status.charAt(0).toUpperCase() + trade.status.slice(1)}
+                      {getStatusText(trade.status)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(trade.createdAt)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    {trade.status === 'initiated' && trade.buyer === 'You' && (
-                      <button
-                        onClick={() => handleTradeAction(trade, 'Mark as paid')}
-                        className="text-indigo-600 hover:text-indigo-900 mr-4"
-                      >
-                        Mark as paid
-                      </button>
-                    )}
-                    {trade.status === 'paid' && trade.seller === 'You' && (
-                      <button
-                        onClick={() => handleTradeAction(trade, 'Release funds')}
-                        className="text-indigo-600 hover:text-indigo-900 mr-4"
-                      >
-                        Release funds
-                      </button>
-                    )}
                     <button
-                      onClick={() => handleTradeAction(trade, 'View details')}
+                      onClick={() => handleViewTrade(trade.id)}
                       className="text-indigo-600 hover:text-indigo-900"
                     >
                       View details

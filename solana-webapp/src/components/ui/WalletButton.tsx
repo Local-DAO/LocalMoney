@@ -71,6 +71,7 @@ export const WalletButton: FC = () => {
       : connected;
       
     if (effectivePublicKey && effectiveConnected) {
+      console.log('Fetching balance for:', effectivePublicKey.toString());
       const fetchBalance = async () => {
         try {
           walletStore.setBalanceLoading(true);

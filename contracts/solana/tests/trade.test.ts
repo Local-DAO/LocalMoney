@@ -207,18 +207,37 @@ describe("trade", () => {
 
     await delay(1000);
 
-    const trade = await tradeClient.getTrade(tradePDA);
-    expect(trade.seller.toString()).to.equal(seller.publicKey.toString());
-    expect(trade.buyer).to.be.null;
-    expect(trade.amount.toNumber()).to.equal(1000_000);
-    expect(trade.price.toNumber()).to.equal(100_000);
-    expect(trade.tokenMint.toString()).to.equal(mint.toString());
-    expect(trade.escrowAccount.toString()).to.equal(escrowKeypair.publicKey.toString());
-    expect(trade.status).to.equal('open');
+    const tradeBeforeDeposit = await tradeClient.getTrade(tradePDA);
+    expect(tradeBeforeDeposit.seller.toString()).to.equal(seller.publicKey.toString());
+    expect(tradeBeforeDeposit.buyer).to.be.null;
+    expect(tradeBeforeDeposit.amount.toNumber()).to.equal(1000_000);
+    expect(tradeBeforeDeposit.price.toNumber()).to.equal(100_000);
+    expect(tradeBeforeDeposit.tokenMint.toString()).to.equal(mint.toString());
+    expect(tradeBeforeDeposit.escrowAccount.toString()).to.equal(escrowKeypair.publicKey.toString());
+    expect(tradeBeforeDeposit.status).to.equal('created');
 
+    // Verify no tokens were transferred to escrow yet
+    const escrowBalanceBeforeDeposit = await getTokenBalance(provider.connection, escrowKeypair.publicKey);
+    expect(escrowBalanceBeforeDeposit).to.equal(0);
+
+    // Now deposit to escrow
+    await tradeClient.depositEscrow(
+      tradePDA,
+      seller,
+      sellerTokenAccount,
+      escrowKeypair.publicKey,
+      amount
+    );
+    
+    await delay(1000);
+    
+    // Check trade status after deposit
+    const tradeAfterDeposit = await tradeClient.getTrade(tradePDA);
+    expect(tradeAfterDeposit.status).to.equal('open');
+    
     // Verify tokens were transferred to escrow
-    const escrowBalance = await getTokenBalance(provider.connection, escrowKeypair.publicKey);
-    expect(escrowBalance).to.equal(1000_000);
+    const escrowBalanceAfterDeposit = await getTokenBalance(provider.connection, escrowKeypair.publicKey);
+    expect(escrowBalanceAfterDeposit).to.equal(1000_000);
 
     // Update escrowTokenAccount for subsequent tests
     escrowTokenAccount = escrowKeypair.publicKey;
@@ -273,6 +292,16 @@ describe("trade", () => {
     );
     await delay(1000);
 
+    // Deposit to escrow
+    await tradeClient.depositEscrow(
+      cancelTradePDA,
+      cancelTestSeller,
+      cancelTestSellerTokenAccount,
+      escrowKeypair.publicKey,
+      amount
+    );
+    await delay(1000);
+
     await tradeClient.cancelTrade(
       cancelTradePDA,
       cancelTestSeller,
@@ -299,6 +328,16 @@ describe("trade", () => {
       escrowKeypair,
       amount,
       price
+    );
+    await delay(1000);
+
+    // Deposit to escrow
+    await tradeClient.depositEscrow(
+      disputeTradePDA,
+      disputeTestSeller,
+      disputeTestSellerTokenAccount,
+      escrowKeypair.publicKey,
+      amount
     );
     await delay(1000);
 

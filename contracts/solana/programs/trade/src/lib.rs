@@ -23,23 +23,12 @@ pub mod trade {
         trade.price = price;
         trade.token_mint = ctx.accounts.token_mint.key();
         trade.escrow_account = ctx.accounts.escrow_account.key();
-        trade.status = TradeStatus::Open;
+        trade.status = TradeStatus::Created;
         trade.created_at = Clock::get()?.unix_timestamp;
         trade.updated_at = Clock::get()?.unix_timestamp;
         trade.bump = ctx.bumps.trade;
 
-        // Transfer tokens to escrow
-        let transfer_ctx = CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            token::Transfer {
-                from: ctx.accounts.seller_token_account.to_account_info(),
-                to: ctx.accounts.escrow_account.to_account_info(),
-                authority: ctx.accounts.seller.to_account_info(),
-            },
-        );
-        token::transfer(transfer_ctx, amount)?;
-
-        msg!("Trade created successfully");
+        msg!("Trade created successfully - requires escrow deposit");
         Ok(())
     }
 
@@ -207,17 +196,33 @@ pub mod trade {
         );
         token::transfer(transfer_ctx, amount)?;
 
-        // Update trade info if necessary
+        // Update trade info
         let trade = &mut ctx.accounts.trade;
+
+        // Verify the depositor is the trade seller
+        require!(
+            trade.seller == ctx.accounts.depositor.key(),
+            TradeError::UnauthorizedDepositor
+        );
+
+        // Verify the trade is in Created status
+        require!(
+            trade.status == TradeStatus::Created,
+            TradeError::InvalidTradeStatus
+        );
+
+        // Update trade status to Open after deposit
+        trade.status = TradeStatus::Open;
         trade.updated_at = Clock::get()?.unix_timestamp;
 
-        msg!("Deposited {} tokens to escrow", amount);
+        msg!("Deposited {} tokens to escrow, trade is now open", amount);
         Ok(())
     }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
 pub enum TradeStatus {
+    Created,
     Open,
     InProgress,
     Completed,
@@ -393,4 +398,6 @@ pub enum TradeError {
     InvalidTradeStatus,
     #[msg("Unauthorized disputer")]
     UnauthorizedDisputer,
+    #[msg("Unauthorized to deposit to this trade's escrow")]
+    UnauthorizedDepositor,
 }

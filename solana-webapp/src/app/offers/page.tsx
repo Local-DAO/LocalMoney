@@ -219,7 +219,7 @@ export default function Offers() {
                       View
                     </button>
                     <button
-                      onClick={() => toast.success(`Trade with ${offer.creator} feature coming soon!`)}
+                      onClick={() => router.push(`/trades/create?offerId=${offer.id}`)}
                       className="text-indigo-600 hover:text-indigo-900"
                     >
                       Trade

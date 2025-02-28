@@ -13,6 +13,15 @@ declare module '@localmoney/solana-sdk' {
     Closed = 'closed'
   }
 
+  export enum TradeStatus {
+    Created = 'created',
+    Open = 'open',
+    InProgress = 'inProgress',
+    Completed = 'completed',
+    Cancelled = 'cancelled',
+    Disputed = 'disputed'
+  }
+
   export interface Offer {
     maker: PublicKey;
     tokenMint: PublicKey;

@@ -78,13 +78,8 @@ export default function CreateOffer() {
       return;
     }
 
-    if (parseFloat(maxAmount) > parseFloat(price)) {
-      toast.error('Maximum amount cannot be greater than total amount');
-      return;
-    }
-
-    if (parseFloat(price) < parseFloat(minAmount)) {
-      toast.error('Total amount must be greater than or equal to minimum amount');
+    if (parseFloat(price) <= 0) {
+      toast.error('Price must be greater than zero');
       return;
     }
 
@@ -332,7 +327,7 @@ export default function CreateOffer() {
                   />
                 </div>
                 <p className="mt-1 text-xs text-gray-500">
-                  Maximum amount allowed per individual trade. Must be less than or equal to total amount.
+                  Maximum amount allowed per individual trade.
                 </p>
               </div>
 

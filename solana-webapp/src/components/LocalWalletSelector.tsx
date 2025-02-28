@@ -4,7 +4,6 @@ import { FC, useEffect, useState } from 'react';
 import { useLocalWalletStore } from '@/utils/localWallets';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { truncateAddress } from '@/utils/format';
-
 const LocalWalletSelector: FC = () => {
   const { wallets, selectWallet, getSelectedWallet, isLocalnetMode } = useLocalWalletStore();
   const { connected, publicKey, disconnect } = useWallet();
@@ -28,6 +27,7 @@ const LocalWalletSelector: FC = () => {
     
     selectWallet(type);
     setSelectedWallet(getSelectedWallet());
+    console.log('Selected wallet:', selectedWallet);
   };
 
   return (
