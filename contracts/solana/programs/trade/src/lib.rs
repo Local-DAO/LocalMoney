@@ -9,7 +9,7 @@ use price::{self, PriceState};
 use profile::program::Profile;
 use profile::{self, Profile as ProfileAccount};
 
-declare_id!("6VXLHER2xPndomqaXWPPUH3733HVmcRMUuU5w9eNVqbZ");
+declare_id!("2ebQZghoJAExZ64eUuw5xq7GVycibtsyA2yPKgfNSYNj");
 
 #[program]
 pub mod trade {

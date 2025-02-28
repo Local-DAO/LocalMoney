@@ -1,5 +1,5 @@
 ---
-description: Solana App Development
+description: Solana App Developments
 globs: *.rs, *.ts, *.tsx, *.js, *.jsx, *.json, *.toml, package.json, *.mdx
 alwaysApply: false
 ---

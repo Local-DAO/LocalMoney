@@ -12,10 +12,10 @@ profile = "8FJf3ymGwZ2ctUP85QRCsE2kMcuQY5Eu7X3dyXr7XakD"
 trade = "6VXLHER2xPndomqaXWPPUH3733HVmcRMUuU5w9eNVqbZ"
 
 [programs.mainnet]
-offer = "52CejgfZEeefMzvYqJ7RmcT4NzemCDZf4nsX3kywuw2B"
-price = "8uzArQW1YiLwh2CLQhMU1Ya774EMEbdbpgux6Tf8z1rn"
-profile = "BG73i544YBJXTQaHVqCcTo94pnwvMw4euWhk5V9UvQxK"
-trade = "437aWt9WrLYquEwJsVe3B3kANP77ZCvn4gs4hJBNLefG"
+offer = "FSnCsffRYjRwbpzFCkbwSFtgfSNbxrpYUsq84opqG4wW"
+price = "BGuwRibtPCCLCo98AFDk6C3QUPS2VHBkTRyDgkCrySfG"
+profile = "8FJf3ymGwZ2ctUP85QRCsE2kMcuQY5Eu7X3dyXr7XakD"
+trade = "2ebQZghoJAExZ64eUuw5xq7GVycibtsyA2yPKgfNSYNj"
 
 [registry]
 url = "https://api.apr.dev"
