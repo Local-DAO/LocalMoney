@@ -33,10 +33,6 @@
       ],
       "args": [
         {
-          "name": "amount",
-          "type": "u64"
-        },
-        {
           "name": "pricePerToken",
           "type": "u64"
         },

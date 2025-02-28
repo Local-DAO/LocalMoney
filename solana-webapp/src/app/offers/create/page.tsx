@@ -27,7 +27,6 @@ export default function CreateOffer() {
   // Form state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [offerType, setOfferType] = useState<OfferType>(OfferType.Sell);
-  const [amount, setAmount] = useState('');
   const [price, setPrice] = useState('');
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
@@ -69,7 +68,7 @@ export default function CreateOffer() {
       return;
     }
 
-    if (!amount || !price || !minAmount || !maxAmount) {
+    if (!minAmount || !maxAmount) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -79,12 +78,12 @@ export default function CreateOffer() {
       return;
     }
 
-    if (parseFloat(maxAmount) > parseFloat(amount)) {
+    if (parseFloat(maxAmount) > parseFloat(price)) {
       toast.error('Maximum amount cannot be greater than total amount');
       return;
     }
 
-    if (parseFloat(amount) < parseFloat(minAmount)) {
+    if (parseFloat(price) < parseFloat(minAmount)) {
       toast.error('Total amount must be greater than or equal to minimum amount');
       return;
     }
@@ -169,7 +168,6 @@ export default function CreateOffer() {
       const offerPDA = await createOffer(
         effectiveConnection,
         wallet,
-        parseFloat(amount),
         parseFloat(price),
         parseFloat(minAmount),
         parseFloat(maxAmount),
@@ -257,29 +255,6 @@ export default function CreateOffer() {
                     </label>
                   </div>
                 </div>
-              </div>
-
-              {/* Amount */}
-              <div className="sm:col-span-3">
-                <label htmlFor="amount" className="block text-sm font-medium text-gray-700">
-                  Amount (SOL)
-                </label>
-                <div className="mt-1">
-                  <input
-                    type="number"
-                    name="amount"
-                    id="amount"
-                    step="0.000001"
-                    min="0"
-                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    required
-                  />
-                </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  Total amount of SOL for this offer. Must be greater than or equal to maximum amount.
-                </p>
               </div>
 
               {/* Price */}

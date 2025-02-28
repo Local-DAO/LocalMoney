@@ -58,7 +58,6 @@ export interface Trade {
 export interface Offer {
   maker: PublicKey;
   tokenMint: PublicKey;
-  amount: BN;
   pricePerToken: BN;
   minAmount: BN;
   maxAmount: BN;

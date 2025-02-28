@@ -76,7 +76,6 @@ export const createOfferClient = async (
 export const createOffer = async (
   connection: Connection,
   wallet: any,
-  amount: number,
   price: number,
   minAmount: number,
   maxAmount: number,
@@ -84,51 +83,61 @@ export const createOffer = async (
   currency: string
 ): Promise<string | null> => {
   try {
-    // Create a proper wallet adapter for Anchor if it doesn't already have signing methods
-    const walletAdapter = wallet.signTransaction ? wallet : {
-      publicKey: wallet.publicKey,
-      signTransaction: async (tx: any) => {
-        if (!wallet.keypair) {
-          throw new Error('Wallet keypair not available for signing');
-        }
-        tx.sign(wallet.keypair);
-        return tx;
-      },
-      signAllTransactions: async (txs: any[]) => {
-        if (!wallet.keypair) {
-          throw new Error('Wallet keypair not available for signing');
-        }
-        return txs.map(tx => {
-          tx.sign(wallet.keypair);
-          return tx;
-        });
-      }
-    };
+    // Create new offer client
+    const offerClient = await createOfferClient(connection, wallet);
     
-    // Create the offer client with the wallet adapter
-    const offerClient = await createOfferClient(connection, walletAdapter);
+    // Convert string parameters to BN (big number) as required by the SDK
+    const priceBN = new BN(price);
+    const minAmountBN = new BN(minAmount);
+    const maxAmountBN = new BN(maxAmount);
     
-    // Convert values to BN
-    const amountBN = new BN(Math.floor(amount * 1e9)); // Convert to lamports
-    const priceBN = new BN(Math.floor(price * 100)); // Price in cents
-    const minAmountBN = new BN(Math.floor(minAmount * 1e9));
-    const maxAmountBN = new BN(Math.floor(maxAmount * 1e9));
+    // Convert the offer type string to the enum expected by the SDK
+    const offerType_enum = offerType === 'buy' ? OfferType.Buy : OfferType.Sell;
     
-    // Get SOL token mint
+    // Get the token mint public key
     const tokenMint = new PublicKey(SOL_TOKEN_MINT);
     
-    // Create the offer
-    // If the wallet has a keypair, use it, otherwise use null (anchor will use the wallet adapter)
-    const signingKeypair = wallet.keypair || null;
+    // Determine the signing keypair - we need an actual Keypair for the maker parameter
+    let signingKeypair: Keypair | null = null;
     
+    // If wallet has a keypair property, use it directly
+    if (wallet.keypair && wallet.keypair instanceof Keypair) {
+      signingKeypair = wallet.keypair;
+    }
+    // Otherwise, try to derive a keypair from wallet if possible
+    else if (wallet.payer && wallet.payer instanceof Keypair) {
+      signingKeypair = wallet.payer;
+    }
+    // If we have private key directly
+    else if (wallet.secretKey) {
+      signingKeypair = Keypair.fromSecretKey(wallet.secretKey);
+    }
+    
+    // Log parameter values to help debug
+    console.log("Creating offer with parameters:", {
+      signer: wallet.publicKey.toString(),
+      tokenMint: tokenMint.toString(),
+      price: priceBN.toString(),
+      minAmount: minAmountBN.toString(), 
+      maxAmount: maxAmountBN.toString(),
+      offerType: offerType_enum
+    });
+    
+    // The SDK requires a Keypair for the maker parameter, not a PublicKey or null
+    if (!signingKeypair) {
+      console.error('Signing keypair not available, cannot create offer');
+      toast.error('Wallet keypair not available for signing. Please use a local wallet or connect a wallet that supports signing.');
+      return null;
+    }
+    
+    // Call create offer on the client with the updated signature
     const offerPDA = await offerClient.createOffer(
       signingKeypair,
       tokenMint,
-      amountBN,
       priceBN,
       minAmountBN,
       maxAmountBN,
-      offerType === 'buy' ? OfferType.Buy : OfferType.Sell
+      offerType_enum
     );
     
     return offerPDA.toString();
@@ -193,8 +202,9 @@ export const getAllOffers = async (
           return {
             id: pubkey.toString(),
             creator: offerData.maker.toString(),
-            amount: offerData.amount.toNumber() / 1e9, // Convert from lamports to SOL
             price: offerData.pricePerToken.toNumber() / 100, // Convert from cents to dollars
+            minAmount: offerData.minAmount.toNumber() / 1e9, // Convert from lamports to SOL
+            maxAmount: offerData.maxAmount.toNumber() / 1e9, // Convert from lamports to SOL
             currency: 'USD', // This would come from the offer in a real implementation
             paymentMethods: ['Bank Transfer'], // This would come from the offer in a real implementation
             isBuy: offerData.offerType === OfferType.Buy,
@@ -230,8 +240,9 @@ export const getOffer = async (
     return {
       id: offerPDA.toString(),
       creator: offer.maker.toString(),
-      amount: offer.amount.toNumber() / 1e9, // Convert from lamports to SOL
       price: offer.pricePerToken.toNumber() / 100, // Convert from cents to dollars
+      minAmount: offer.minAmount.toNumber() / 1e9, // Convert from lamports to SOL
+      maxAmount: offer.maxAmount.toNumber() / 1e9, // Convert from lamports to SOL
       currency: 'USD', // This would come from the offer in a real implementation
       paymentMethods: ['Bank Transfer'], // This would come from the offer in a real implementation
       isBuy: offer.offerType === OfferType.Buy,

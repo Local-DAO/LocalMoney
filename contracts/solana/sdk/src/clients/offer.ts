@@ -19,25 +19,31 @@ export class OfferClient {
   async createOffer(
     maker: Keypair,
     tokenMint: PublicKey,
-    amount: BN,
     pricePerToken: BN,
     minAmount: BN,
     maxAmount: BN,
     offerType: OfferType
   ): Promise<PublicKey> {
     const [offerPDA] = await PublicKey.findProgramAddress(
-      [Buffer.from("offer"), maker.publicKey.toBuffer()],
+      [
+        Buffer.from("offer"), 
+        maker.publicKey.toBuffer(),
+        tokenMint.toBuffer(),
+        Buffer.from([offerType === OfferType.Buy ? 0 : 1]),
+        minAmount.toArrayLike(Buffer, 'le', 8),
+        maxAmount.toArrayLike(Buffer, 'le', 8)
+      ],
       this.program.programId
     );
 
     await this.program.methods
-      .createOffer(amount, pricePerToken, minAmount, maxAmount, { [offerType]: {} })
+      .createOffer(pricePerToken, minAmount, maxAmount, { [offerType]: {} })
       .accounts({
         offer: offerPDA,
         maker: maker.publicKey,
         tokenMint,
         systemProgram: SystemProgram.programId,
-        rent: SYSVAR_RENT_PUBKEY,
+        rent: SYSVAR_RENT_PUBKEY
       })
       .signers([maker])
       .rpc();
@@ -150,7 +156,6 @@ export class OfferClient {
     return {
       maker: account.maker,
       tokenMint: account.tokenMint,
-      amount: account.amount,
       pricePerToken: account.pricePerToken,
       minAmount: account.minAmount,
       maxAmount: account.maxAmount,
@@ -161,11 +166,47 @@ export class OfferClient {
     };
   }
 
-  async findOfferAddress(maker: PublicKey): Promise<[PublicKey, number]> {
+  async findOfferAddress(
+    maker: PublicKey, 
+    tokenMint: PublicKey, 
+    offerType: OfferType, 
+    minAmount: BN, 
+    maxAmount: BN
+  ): Promise<[PublicKey, number]> {
     return await PublicKey.findProgramAddress(
-      [Buffer.from("offer"), maker.toBuffer()],
+      [
+        Buffer.from("offer"), 
+        maker.toBuffer(),
+        tokenMint.toBuffer(),
+        Buffer.from([offerType === OfferType.Buy ? 0 : 1]),
+        minAmount.toArrayLike(Buffer, 'le', 8),
+        maxAmount.toArrayLike(Buffer, 'le', 8)
+      ],
       this.program.programId
     );
+  }
+
+  /**
+   * Get all offers from the program
+   * @returns Promise<Array<{publicKey: PublicKey, account: Offer}>>
+   */
+  async getAllOffers(): Promise<Array<{publicKey: PublicKey, account: Offer}>> {
+    const accounts = await this.program.account.offer.all();
+    
+    return accounts.map(({ publicKey, account }) => ({
+      publicKey,
+      account: {
+        maker: account.maker,
+        tokenMint: account.tokenMint,
+        pricePerToken: account.pricePerToken,
+        minAmount: account.minAmount,
+        maxAmount: account.maxAmount,
+        offerType: this.convertOfferType(account.offerType),
+        status: this.convertOfferStatus(account.status),
+        createdAt: account.createdAt.toNumber(),
+        updatedAt: account.updatedAt.toNumber(),
+      },
+    }));
   }
 
   private convertOfferStatus(status: any): OfferStatus {

@@ -11,23 +11,17 @@ pub mod offer {
 
     pub fn create_offer(
         ctx: Context<CreateOffer>,
-        amount: u64,
         price_per_token: u64, //TODO: instead of price per token, we should use a pct price based of the Price Oracle price of this token
         min_amount: u64,
         max_amount: u64,
         offer_type: OfferType,
     ) -> Result<()> {
-        require!(amount > 0, OfferError::InvalidAmount);
         require!(price_per_token > 0, OfferError::InvalidPrice);
-        require!(
-            min_amount <= max_amount && max_amount <= amount,
-            OfferError::InvalidAmounts
-        );
+        require!(min_amount <= max_amount, OfferError::InvalidAmounts);
 
         let offer = &mut ctx.accounts.offer;
         offer.maker = ctx.accounts.maker.key();
         offer.token_mint = ctx.accounts.token_mint.key();
-        offer.amount = amount;
         offer.price_per_token = price_per_token;
         offer.min_amount = min_amount;
         offer.max_amount = max_amount;
@@ -62,7 +56,7 @@ pub mod offer {
 
         // Validate amounts after update
         require!(
-            offer.min_amount <= offer.max_amount && offer.max_amount <= offer.amount,
+            offer.min_amount <= offer.max_amount,
             OfferError::InvalidAmounts
         );
 
@@ -121,14 +115,9 @@ pub mod offer {
             amount >= ctx.accounts.offer.min_amount && amount <= ctx.accounts.offer.max_amount,
             OfferError::InvalidAmount
         );
-        require!(
-            amount <= ctx.accounts.offer.amount,
-            OfferError::InsufficientAmount
-        );
 
         // Update offer state
         let offer = &mut ctx.accounts.offer;
-        offer.amount = offer.amount.saturating_sub(amount);
         offer.updated_at = Clock::get()?.unix_timestamp;
 
         msg!("Offer taken successfully for {} tokens", amount);
@@ -137,12 +126,20 @@ pub mod offer {
 }
 
 #[derive(Accounts)]
+#[instruction(price_per_token: u64, min_amount: u64, max_amount: u64, offer_type: OfferType)]
 pub struct CreateOffer<'info> {
     #[account(
         init,
         payer = maker,
         space = Offer::LEN,
-        seeds = [b"offer".as_ref(), maker.key().as_ref()],
+        seeds = [
+            b"offer".as_ref(), 
+            maker.key().as_ref(),
+            token_mint.key().as_ref(),
+            &offer_type.to_u8().to_le_bytes(),
+            &min_amount.to_le_bytes(),
+            &max_amount.to_le_bytes()
+        ],
         bump
     )]
     pub offer: Account<'info, Offer>,
@@ -157,7 +154,14 @@ pub struct CreateOffer<'info> {
 pub struct UpdateOffer<'info> {
     #[account(
         mut,
-        seeds = [b"offer".as_ref(), maker.key().as_ref()],
+        seeds = [
+            b"offer".as_ref(), 
+            maker.key().as_ref(),
+            offer.token_mint.as_ref(),
+            &offer.offer_type.to_u8().to_le_bytes(),
+            &offer.min_amount.to_le_bytes(),
+            &offer.max_amount.to_le_bytes()
+        ],
         bump,
         has_one = maker
     )]
@@ -169,7 +173,14 @@ pub struct UpdateOffer<'info> {
 pub struct OfferStatusUpdate<'info> {
     #[account(
         mut,
-        seeds = [b"offer".as_ref(), maker.key().as_ref()],
+        seeds = [
+            b"offer".as_ref(), 
+            maker.key().as_ref(),
+            offer.token_mint.as_ref(),
+            &offer.offer_type.to_u8().to_le_bytes(),
+            &offer.min_amount.to_le_bytes(),
+            &offer.max_amount.to_le_bytes()
+        ],
         bump,
         has_one = maker
     )]
@@ -184,7 +195,14 @@ pub struct TakeOffer<'info> {
         has_one = maker,
         has_one = token_mint,
         constraint = offer.status == OfferStatus::Active,
-        seeds = [b"offer", maker.key().as_ref()],
+        seeds = [
+            b"offer", 
+            maker.key().as_ref(),
+            token_mint.key().as_ref(),
+            &offer.offer_type.to_u8().to_le_bytes(),
+            &offer.min_amount.to_le_bytes(),
+            &offer.max_amount.to_le_bytes()
+        ],
         bump
     )]
     pub offer: Account<'info, Offer>,
@@ -212,7 +230,14 @@ pub struct DepositEscrow<'info> {
     #[account(
         mut,
         constraint = offer.status == OfferStatus::Active,
-        seeds = [b"offer", offer.maker.as_ref()],
+        seeds = [
+            b"offer", 
+            offer.maker.as_ref(),
+            offer.token_mint.as_ref(),
+            &offer.offer_type.to_u8().to_le_bytes(),
+            &offer.min_amount.to_le_bytes(),
+            &offer.max_amount.to_le_bytes()
+        ],
         bump
     )]
     pub offer: Account<'info, Offer>,
@@ -234,7 +259,6 @@ pub struct DepositEscrow<'info> {
 pub struct Offer {
     pub maker: Pubkey,
     pub token_mint: Pubkey,
-    pub amount: u64,
     pub price_per_token: u64,
     pub min_amount: u64,
     pub max_amount: u64,
@@ -248,7 +272,6 @@ impl Offer {
     pub const LEN: usize = 8 +  // discriminator
         32 + // maker
         32 + // token_mint
-        8 +  // amount
         8 +  // price_per_token
         8 +  // min_amount
         8 +  // max_amount
@@ -267,11 +290,21 @@ pub enum OfferStatus {
     Closed,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Default)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Default, Copy)]
 pub enum OfferType {
     #[default]
     Buy,
     Sell,
+}
+
+// Add a helper method to convert OfferType to u8 for use in seeds
+impl OfferType {
+    pub fn to_u8(&self) -> u8 {
+        match self {
+            OfferType::Buy => 0,
+            OfferType::Sell => 1,
+        }
+    }
 }
 
 #[error_code]
