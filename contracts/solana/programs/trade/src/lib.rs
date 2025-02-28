@@ -17,8 +17,8 @@ pub mod trade {
 
     pub fn create_trade(ctx: Context<CreateTrade>, amount: u64, price: u64) -> Result<()> {
         let trade = &mut ctx.accounts.trade;
-        trade.seller = ctx.accounts.seller.key();
-        trade.buyer = None;
+        trade.maker = ctx.accounts.maker.key();
+        trade.taker = None;
         trade.amount = amount;
         trade.price = price;
         trade.token_mint = ctx.accounts.token_mint.key();
@@ -39,7 +39,7 @@ pub mod trade {
             TradeError::InvalidTradeStatus
         );
 
-        trade.buyer = Some(ctx.accounts.buyer.key());
+        trade.taker = Some(ctx.accounts.taker.key());
         trade.status = TradeStatus::InProgress;
         trade.updated_at = Clock::get()?.unix_timestamp;
 
@@ -68,13 +68,13 @@ pub mod trade {
             100, // 1% tolerance
         )?;
 
-        // Transfer tokens from escrow to buyer
+        // Transfer tokens from escrow to taker
         let trade_account_info = ctx.accounts.trade.to_account_info();
-        let seller_key = ctx.accounts.seller.key();
+        let maker_key = ctx.accounts.maker.key();
         let token_mint = ctx.accounts.trade.token_mint;
         let seeds = &[
             b"trade",
-            seller_key.as_ref(),
+            maker_key.as_ref(),
             token_mint.as_ref(),
             &[ctx.accounts.trade.bump],
         ];
@@ -83,7 +83,7 @@ pub mod trade {
             ctx.accounts.token_program.to_account_info(),
             token::Transfer {
                 from: ctx.accounts.escrow_account.to_account_info(),
-                to: ctx.accounts.buyer_token_account.to_account_info(),
+                to: ctx.accounts.taker_token_account.to_account_info(),
                 authority: trade_account_info,
             },
             signer,
@@ -91,25 +91,25 @@ pub mod trade {
         token::transfer(transfer_ctx, ctx.accounts.trade.amount)?;
 
         // Update profiles using CPI
-        let buyer_profile_ctx = CpiContext::new(
+        let taker_profile_ctx = CpiContext::new(
             ctx.accounts.profile_program.to_account_info(),
             profile::cpi::accounts::RecordTrade {
-                profile: ctx.accounts.buyer_profile.to_account_info(),
-                owner: ctx.accounts.buyer.to_account_info(),
+                profile: ctx.accounts.taker_profile.to_account_info(),
+                owner: ctx.accounts.taker.to_account_info(),
                 trade_program: ctx.accounts.trade.to_account_info(),
             },
         );
-        profile::cpi::record_trade_completion(buyer_profile_ctx)?;
+        profile::cpi::record_trade_completion(taker_profile_ctx)?;
 
-        let seller_profile_ctx = CpiContext::new(
+        let maker_profile_ctx = CpiContext::new(
             ctx.accounts.profile_program.to_account_info(),
             profile::cpi::accounts::RecordTrade {
-                profile: ctx.accounts.seller_profile.to_account_info(),
-                owner: ctx.accounts.seller.to_account_info(),
+                profile: ctx.accounts.maker_profile.to_account_info(),
+                owner: ctx.accounts.maker.to_account_info(),
                 trade_program: ctx.accounts.trade.to_account_info(),
             },
         );
-        profile::cpi::record_trade_completion(seller_profile_ctx)?;
+        profile::cpi::record_trade_completion(maker_profile_ctx)?;
 
         // Update trade status after all CPIs
         let trade = &mut ctx.accounts.trade;
@@ -136,17 +136,17 @@ pub mod trade {
             amount = trade.amount;
         }
 
-        let seller_key = ctx.accounts.seller.key();
+        let maker_key = ctx.accounts.maker.key();
         let trade_account_info = ctx.accounts.trade.to_account_info();
 
-        // Return tokens from escrow to seller
-        let seeds = &[b"trade", seller_key.as_ref(), token_mint.as_ref(), &[bump]];
+        // Return tokens from escrow to maker
+        let seeds = &[b"trade", maker_key.as_ref(), token_mint.as_ref(), &[bump]];
         let signer = &[&seeds[..]];
         let transfer_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             token::Transfer {
                 from: ctx.accounts.escrow_account.to_account_info(),
-                to: ctx.accounts.seller_token_account.to_account_info(),
+                to: ctx.accounts.maker_token_account.to_account_info(),
                 authority: trade_account_info,
             },
             signer,
@@ -165,10 +165,10 @@ pub mod trade {
     pub fn dispute_trade(ctx: Context<DisputeTrade>) -> Result<()> {
         let trade = &mut ctx.accounts.trade;
 
-        // Verify disputer is either buyer or seller
+        // Verify disputer is either taker or maker
         let disputer_key = ctx.accounts.disputer.key();
         require!(
-            trade.seller == disputer_key || trade.buyer == Some(disputer_key),
+            trade.maker == disputer_key || trade.taker == Some(disputer_key),
             TradeError::UnauthorizedDisputer
         );
 
@@ -199,9 +199,9 @@ pub mod trade {
         // Update trade info
         let trade = &mut ctx.accounts.trade;
 
-        // Verify the depositor is the trade seller
+        // Verify the depositor is the trade maker
         require!(
-            trade.seller == ctx.accounts.depositor.key(),
+            trade.maker == ctx.accounts.depositor.key(),
             TradeError::UnauthorizedDepositor
         );
 
@@ -232,8 +232,8 @@ pub enum TradeStatus {
 
 #[account]
 pub struct Trade {
-    pub seller: Pubkey,
-    pub buyer: Option<Pubkey>,
+    pub maker: Pubkey,
+    pub taker: Option<Pubkey>,
     pub amount: u64,
     pub price: u64,
     pub token_mint: Pubkey,
@@ -249,10 +249,10 @@ pub struct Trade {
 pub struct CreateTrade<'info> {
     #[account(
         init,
-        payer = seller,
+        payer = maker,
         space = 8 + // discriminator
-            32 + // seller
-            (1 + 32) + // buyer (Option<Pubkey>) - 1 for the tag, 32 for the pubkey
+            32 + // maker
+            (1 + 32) + // taker (Option<Pubkey>) - 1 for the tag, 32 for the pubkey
             8 + // amount
             8 + // price
             32 + // token_mint
@@ -262,18 +262,18 @@ pub struct CreateTrade<'info> {
             8 + // updated_at
             1 + // bump
             64, // padding for future updates
-        seeds = [b"trade", seller.key().as_ref(), token_mint.key().as_ref()],
+        seeds = [b"trade", maker.key().as_ref(), token_mint.key().as_ref()],
         bump
     )]
     pub trade: Account<'info, Trade>,
     #[account(mut)]
-    pub seller: Signer<'info>,
+    pub maker: Signer<'info>,
     pub token_mint: Account<'info, token::Mint>,
     #[account(mut)]
-    pub seller_token_account: Account<'info, token::TokenAccount>,
+    pub maker_token_account: Account<'info, token::TokenAccount>,
     #[account(
         init,
-        payer = seller,
+        payer = maker,
         token::mint = token_mint,
         token::authority = trade,
     )]
@@ -287,21 +287,21 @@ pub struct CreateTrade<'info> {
 pub struct AcceptTrade<'info> {
     #[account(mut)]
     pub trade: Account<'info, Trade>,
-    pub buyer: Signer<'info>,
+    pub taker: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct CompleteTrade<'info> {
     #[account(
         mut,
-        seeds = [b"trade", seller.key().as_ref(), trade.token_mint.as_ref()],
+        seeds = [b"trade", maker.key().as_ref(), trade.token_mint.as_ref()],
         bump,
     )]
     pub trade: Account<'info, Trade>,
-    #[account(constraint = seller.key() == trade.seller)]
-    pub seller: Signer<'info>,
-    #[account(constraint = buyer.key() == trade.buyer.unwrap())]
-    pub buyer: Signer<'info>,
+    #[account(constraint = maker.key() == trade.maker)]
+    pub maker: Signer<'info>,
+    #[account(constraint = taker.key() == trade.taker.unwrap())]
+    pub taker: Signer<'info>,
     #[account(
         mut,
         constraint = escrow_account.key() == trade.escrow_account
@@ -309,10 +309,10 @@ pub struct CompleteTrade<'info> {
     pub escrow_account: Box<Account<'info, token::TokenAccount>>,
     #[account(
         mut,
-        constraint = buyer_token_account.mint == trade.token_mint,
-        constraint = buyer_token_account.owner == buyer.key()
+        constraint = taker_token_account.mint == trade.token_mint,
+        constraint = taker_token_account.owner == taker.key()
     )]
-    pub buyer_token_account: Box<Account<'info, token::TokenAccount>>,
+    pub taker_token_account: Box<Account<'info, token::TokenAccount>>,
     pub token_program: Program<'info, Token>,
 
     // Price verification accounts with proper constraints
@@ -322,18 +322,18 @@ pub struct CompleteTrade<'info> {
     // Profile accounts with proper constraints
     #[account(
         mut,
-        seeds = [b"profile", buyer.key().as_ref()],
+        seeds = [b"profile", taker.key().as_ref()],
         bump,
         seeds::program = profile_program.key()
     )]
-    pub buyer_profile: Account<'info, ProfileAccount>,
+    pub taker_profile: Account<'info, ProfileAccount>,
     #[account(
         mut,
-        seeds = [b"profile", seller.key().as_ref()],
+        seeds = [b"profile", maker.key().as_ref()],
         bump,
         seeds::program = profile_program.key()
     )]
-    pub seller_profile: Account<'info, ProfileAccount>,
+    pub maker_profile: Account<'info, ProfileAccount>,
     pub profile_program: Program<'info, Profile>,
 }
 
@@ -341,12 +341,12 @@ pub struct CompleteTrade<'info> {
 pub struct CancelTrade<'info> {
     #[account(
         mut,
-        seeds = [b"trade", seller.key().as_ref(), trade.token_mint.as_ref()],
+        seeds = [b"trade", maker.key().as_ref(), trade.token_mint.as_ref()],
         bump = trade.bump,
     )]
     pub trade: Account<'info, Trade>,
-    #[account(constraint = seller.key() == trade.seller)]
-    pub seller: Signer<'info>,
+    #[account(constraint = maker.key() == trade.maker)]
+    pub maker: Signer<'info>,
     #[account(
         mut,
         constraint = escrow_account.key() == trade.escrow_account
@@ -354,10 +354,10 @@ pub struct CancelTrade<'info> {
     pub escrow_account: Box<Account<'info, token::TokenAccount>>,
     #[account(
         mut,
-        constraint = seller_token_account.mint == trade.token_mint,
-        constraint = seller_token_account.owner == seller.key()
+        constraint = maker_token_account.mint == trade.token_mint,
+        constraint = maker_token_account.owner == maker.key()
     )]
-    pub seller_token_account: Box<Account<'info, token::TokenAccount>>,
+    pub maker_token_account: Box<Account<'info, token::TokenAccount>>,
     pub token_program: Program<'info, Token>,
 }
 

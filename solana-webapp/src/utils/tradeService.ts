@@ -1,6 +1,6 @@
 import { AnchorProvider, BN, Idl, Program } from '@project-serum/anchor';
-import { Connection, Keypair, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, Transaction } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, getAccount } from '@solana/spl-token';
+import { Connection, Keypair, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, Transaction, TransactionInstruction } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, getAccount, createSyncNativeInstruction } from '@solana/spl-token';
 import { TradeStatus } from '@localmoney/solana-sdk';
 import toast from 'react-hot-toast';
 
@@ -10,6 +10,7 @@ const TRADE_PROGRAM_ID = process.env.NEXT_PUBLIC_TRADE_PROGRAM_ID || '6VXLHER2xP
 const SOL_TOKEN_MINT = 'So11111111111111111111111111111111111111112';
 
 // Helper function to check token balance and airdrop SOL if needed
+const LAMPORTS_PER_SOL = 1000000000;
 const ensureSufficientTokens = async (
   connection: Connection,
   wallet: any,
@@ -93,10 +94,13 @@ export const createTradeClient = async (
     }
     
     // Make sure the wallet has the required sign methods for Anchor
-    if (wallet.keypair && !wallet.signTransaction) {
-      console.log('Adding signTransaction methods to wallet');
-      wallet = {
-        ...wallet,
+    let anchorWallet = wallet;
+    
+    if (wallet.keypair) {
+      console.log('Creating Anchor wallet from local wallet with keypair');
+      // For local wallets with keypair, create a proper AnchorWallet
+      anchorWallet = {
+        publicKey: wallet.publicKey,
         signTransaction: async (tx: any) => {
           tx.partialSign(wallet.keypair);
           return tx;
@@ -108,12 +112,18 @@ export const createTradeClient = async (
           });
         }
       };
+    } else {
+      console.log('Using wallet adapter as is (should have signTransaction methods)');
+      // For browser wallets via wallet adapter, we assume signTransaction is already defined
+      if (!wallet.signTransaction) {
+        console.warn('Warning: Wallet missing signTransaction method');
+      }
     }
     
     // Create an Anchor provider with proper options
     const provider = new AnchorProvider(
       connection,
-      wallet,
+      anchorWallet,
       { 
         commitment: 'confirmed',
         preflightCommitment: 'confirmed',
@@ -179,10 +189,13 @@ class TradeClient {
   ) {
     this.program = new Program(idl, programId, provider);
     this.connection = provider.connection;
+    console.log("TradeClient initialized with connection:", 
+      this.connection ? "Connection available" : "No connection",
+      "Provider connection:", provider.connection ? "Available" : "Not available");
   }
 
   async createTrade(
-    taker: any,
+    maker: any,
     offerPDA: PublicKey,
     offerOwner: PublicKey,
     tokenMint: PublicKey,
@@ -191,9 +204,9 @@ class TradeClient {
   ): Promise<PublicKey> {
     try {
       // Check token account balance
-      const takerTokenAccount = await getAssociatedTokenAddress(
+      const makerTokenAccount = await getAssociatedTokenAddress(
         tokenMint,
-        taker.publicKey
+        maker.publicKey
       );
 
       // Create escrow keypair
@@ -202,7 +215,7 @@ class TradeClient {
       // Check if the token account exists, if not create it
       let accountExists = false;
       try {
-        const accountInfo = await getAccount(this.connection, takerTokenAccount);
+        const accountInfo = await getAccount(this.connection, makerTokenAccount);
         accountExists = true;
         
         // Check if there are enough tokens
@@ -213,8 +226,8 @@ class TradeClient {
             // If this is SOL and we're on localnet, we might need to airdrop
             if (this.connection.rpcEndpoint.includes('localhost') || this.connection.rpcEndpoint.includes('127.0.0.1')) {
               console.log(`Not enough SOL. Current: ${balance.toString()}, Required: ${amount.toString()}`);
-              console.log(`Airdropping 111 SOL to ${taker.publicKey.toString()}`);
-              const airdropSignature = await this.connection.requestAirdrop(taker.publicKey, 111 * 1e9);
+              console.log(`Airdropping 111 SOL to ${maker.publicKey.toString()}`);
+              const airdropSignature = await this.connection.requestAirdrop(maker.publicKey, 111 * 1e9);
               await this.connection.confirmTransaction(airdropSignature, 'confirmed');
               console.log('Airdrop successful');
             } else {
@@ -232,11 +245,11 @@ class TradeClient {
         accountExists = false;
       }
 
-      // Create the trade PDA
+      // Create the trade PDA - using proper maker/taker terminology
       const [tradePDA] = await PublicKey.findProgramAddress(
         [
           Buffer.from("trade"),
-          taker.publicKey.toBuffer(),
+          maker.publicKey.toBuffer(), // This is the maker in the current context
           tokenMint.toBuffer(),
         ],
         this.program.programId
@@ -246,12 +259,12 @@ class TradeClient {
       let signers = [escrowAccount]; // Always need the escrow account
       
       // For local wallets with keypair, use the keypair directly
-      if (taker.keypair) {
-        signers.push(taker.keypair);
+      if (maker.keypair) {
+        signers.push(maker.keypair);
       } 
       // For wallet adapter that has signTransaction
-      else if (taker.signTransaction) {
-        signers.push(taker);
+      else if (maker.signTransaction) {
+        signers.push(maker);
       }
       // For other wallet types, we'll need to specify signers differently
       else {
@@ -262,9 +275,9 @@ class TradeClient {
       if (!accountExists) {
         // Create a transaction to create the token account
         const createTokenAccountIx = createAssociatedTokenAccountInstruction(
-          taker.publicKey,
-          takerTokenAccount,
-          taker.publicKey,
+          maker.publicKey,
+          makerTokenAccount,
+          maker.publicKey,
           tokenMint
         );
         
@@ -272,11 +285,11 @@ class TradeClient {
         const transaction = new Transaction().add(createTokenAccountIx);
         const { blockhash } = await this.connection.getLatestBlockhash();
         transaction.recentBlockhash = blockhash;
-        transaction.feePayer = taker.publicKey;
+        transaction.feePayer = maker.publicKey;
         
-        if (taker.keypair) {
+        if (maker.keypair) {
           // For local wallets with keypair
-          transaction.sign(taker.keypair);
+          transaction.sign(maker.keypair);
           const signature = await this.connection.sendRawTransaction(transaction.serialize());
           
           // Wait for confirmation with signature
@@ -286,9 +299,9 @@ class TradeClient {
             blockhash,
             lastValidBlockHeight: (await this.connection.getBlockHeight()) + 150
           }, 'confirmed');
-        } else if (taker.signTransaction) {
+        } else if (maker.signTransaction) {
           // For wallet adapter
-          const signedTx = await taker.signTransaction(transaction);
+          const signedTx = await maker.signTransaction(transaction);
           const signature = await this.connection.sendRawTransaction(signedTx.serialize());
           
           // Wait for confirmation with signature
@@ -303,14 +316,14 @@ class TradeClient {
         }
       }
       
-      // Create the transaction
+      // Create the transaction - update account names to match new IDL
       await this.program.methods
         .createTrade(amount, price)
         .accounts({
           trade: tradePDA,
-          seller: taker.publicKey,
+          maker: maker.publicKey,
           tokenMint: tokenMint,
-          sellerTokenAccount: takerTokenAccount,
+          makerTokenAccount: makerTokenAccount, // Updated from sellerTokenAccount to makerTokenAccount
           escrowAccount: escrowAccount.publicKey,
           tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
@@ -328,15 +341,15 @@ class TradeClient {
 
   async acceptTrade(
     tradePDA: PublicKey,
-    user: any
+    taker: any
   ): Promise<void> {
     await this.program.methods
       .acceptTrade()
       .accounts({
         trade: tradePDA,
-        user: user.publicKey,
+        taker: taker.publicKey, // Updated from user to taker
       })
-      .signers([user])
+      .signers([taker])
       .rpc();
   }
 
@@ -350,8 +363,8 @@ class TradeClient {
       .completeTrade()
       .accounts({
         trade: tradePDA,
-        seller: trade.seller,
-        buyer: trade.buyer,
+        maker: trade.maker, // Updated from seller to maker
+        taker: trade.taker, // Updated from buyer to taker
         escrowAccount: trade.escrowAccount,
         user: user.publicKey,
         tokenProgram: TOKEN_PROGRAM_ID,
@@ -370,7 +383,7 @@ class TradeClient {
       .cancelTrade()
       .accounts({
         trade: tradePDA,
-        user: user.publicKey,
+        maker: user.publicKey, // Updated from seller to maker
         escrowAccount: trade.escrowAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
@@ -395,8 +408,8 @@ class TradeClient {
   async getTrade(tradePDA: PublicKey): Promise<any> {
     const account = await this.program.account.trade.fetch(tradePDA);
     return {
-      seller: account.seller,
-      buyer: account.buyer,
+      maker: account.maker,  // Updated from seller to maker
+      taker: account.taker,  // Updated from buyer to taker
       amount: account.amount,
       price: account.price,
       tokenMint: account.tokenMint,
@@ -409,23 +422,71 @@ class TradeClient {
   }
   
   async getTradesByUser(userPublicKey: PublicKey): Promise<any[]> {
-    // This would fetch all trades and filter by buyer or seller
+    // This would fetch all trades and filter by maker or taker
     let allTrades = [];
+    console.log("Fetching trades for user:", userPublicKey.toString());
+    
     try {
-      allTrades = await this.program.account.trade.all();
+      // Add extra error handling for account fetching and decoding
+      try {
+        allTrades = await this.program.account.trade.all();
+        console.log("Total trades found:", allTrades.length);
+      } catch (decodeError) {
+        console.error('Error decoding trade accounts:', decodeError);
+        
+        // Fallback to fetch accounts without decoding
+        const rawAccounts = await this.connection.getProgramAccounts(this.program.programId);
+        console.log("Raw accounts fetched:", rawAccounts.length);
+        
+        // Try to decode each account individually
+        allTrades = rawAccounts
+          .map(account => {
+            try {
+              // Manual decoding with error handling
+              const decodedAccount = this.program.coder.accounts.decode('Trade', account.account.data);
+              return {
+                publicKey: account.pubkey,
+                account: decodedAccount
+              };
+            } catch (error) {
+              console.warn(`Failed to decode account ${account.pubkey.toString()}`, error);
+              return null;
+            }
+          })
+          .filter(account => account !== null);
+        
+        console.log("Successfully decoded accounts:", allTrades.length);
+      }
     } catch (error) {
       console.error('Error fetching all trades:', error);
       return []; // Return empty array if fetching fails completely
     }
     
     // Filter and map trades with additional error handling
-    return allTrades
+    const filteredTrades = allTrades
       .filter(account => {
         try {
+          if (!account || !account.account) {
+            console.warn('Skipping null account');
+            return false;
+          }
+          
           const trade = account.account;
-          // Check that both buyer and seller exist before comparing
-          return (trade.buyer && trade.buyer.equals(userPublicKey)) || 
-                (trade.seller && trade.seller.equals(userPublicKey));
+          // Check if trade object has the required properties
+          if (!trade.maker) {
+            console.warn('Skipping trade without maker');
+            return false;
+          }
+          
+          // Use maker/taker terminology consistently
+          const isMaker = trade.maker && trade.maker.equals(userPublicKey);
+          const isTaker = trade.taker && trade.taker.equals(userPublicKey);
+          console.log("Trade:", account.publicKey.toString(), 
+            "Maker:", trade.maker?.toString(), 
+            "Taker:", trade.taker?.toString(), 
+            "User is maker:", isMaker, 
+            "User is taker:", isTaker);
+          return isMaker || isTaker;
         } catch (error) {
           console.warn('Skipping invalid trade account:', error);
           return false; // Skip this account if we can't process it
@@ -436,8 +497,8 @@ class TradeClient {
           const trade = account.account;
           return {
             publicKey: account.publicKey,
-            seller: trade.seller,
-            buyer: trade.buyer,
+            maker: trade.maker,
+            taker: trade.taker,
             amount: trade.amount,
             price: trade.price,
             tokenMint: trade.tokenMint,
@@ -453,6 +514,9 @@ class TradeClient {
         }
       })
       .filter(trade => trade !== null); // Remove null entries
+      
+    console.log("Filtered trades for user:", filteredTrades.length);
+    return filteredTrades;
   }
 
   private convertTradeStatus(status: any): TradeStatus {
@@ -468,25 +532,185 @@ class TradeClient {
   async depositTradeEscrow(
     tradePDA: PublicKey,
     depositor: any,
-    depositorTokenAccount: PublicKey,
-    escrowAccount: PublicKey,
-    amount: BN
+    amount: number
   ): Promise<void> {
+    console.log(
+      "TradeClient.depositTradeEscrow called",
+      "Type of depositor:", typeof depositor,
+      "Public key:", depositor.publicKey.toString(),
+      "Amount:", amount,
+      "Trade PDA:", tradePDA.toString()
+    );
+    
+    // First, fetch the trade to get the escrow account
+    console.log("Fetching trade to get escrow account...");
+    const trade = await this.getTrade(tradePDA);
+    if (!trade || !trade.escrowAccount) {
+      throw new Error("Failed to get escrow account from trade");
+    }
+    
+    console.log("Found escrow account:", trade.escrowAccount.toString());
+    
+    // Define the SOL token mint address (for Wrapped SOL)
+    const SOL_TOKEN_MINT = new PublicKey('So11111111111111111111111111111111111111112');
+    
+    // Create instructions for a proper token-based deposit flow
+    const instructions: TransactionInstruction[] = [];
+    
+    // 1. Get or create the Associated Token Account (ATA) for WSOL
+    const depositorTokenAccount = await getAssociatedTokenAddress(
+      SOL_TOKEN_MINT,
+      depositor.publicKey
+    );
+    console.log("Using ATA for WSOL:", depositorTokenAccount.toString());
+    
+    // 2. Check if the token account already exists
+    let wsTokenAccount;
     try {
-      await this.program.methods
-        .depositEscrow(amount)
-        .accounts({
-          trade: tradePDA,
-          depositor: depositor.publicKey,
-          depositorTokenAccount: depositorTokenAccount,
-          escrowAccount: escrowAccount,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .signers([depositor])
-        .rpc();
-    } catch (error: any) {
-      console.error('Error depositing to escrow:', error);
-      throw error;
+      wsTokenAccount = await getAccount(this.connection, depositorTokenAccount);
+      console.log("WSOL account exists with balance:", wsTokenAccount.amount.toString());
+    } catch (error) {
+      console.log("WSOL account doesn't exist, will create");
+      
+      // Create the ATA for WSOL
+      const createATAIx = createAssociatedTokenAccountInstruction(
+        depositor.publicKey,  // Payer
+        depositorTokenAccount, // ATA address
+        depositor.publicKey,  // Owner
+        SOL_TOKEN_MINT        // Mint
+      );
+      instructions.push(createATAIx);
+    }
+    
+    // 3. Create instruction to wrap SOL into WSOL (fund the token account)
+    // We add a little extra to cover rent exemption and account creation
+    const wrapSolIx = SystemProgram.transfer({
+      fromPubkey: depositor.publicKey,
+      toPubkey: depositorTokenAccount,
+      lamports: amount
+    });
+    instructions.push(wrapSolIx);
+    
+    // 4. We need a sync native instruction to sync the token balance
+    const syncNativeIx = createSyncNativeInstruction(depositorTokenAccount);
+    instructions.push(syncNativeIx);
+    
+    // 5. Now prepare the deposit escrow instruction
+    const depositEscrowIx = await this.program.methods
+      .depositEscrow(new BN(amount))
+      .accounts({
+        trade: tradePDA,
+        escrowAccount: trade.escrowAccount,
+        depositor: depositor.publicKey,
+        depositorTokenAccount: depositorTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .instruction();
+    
+    instructions.push(depositEscrowIx);
+    
+    // 6. Optionally add an instruction to close the token account after the deposit
+    // to get SOL back from rent exemption (usually a good practice)
+    // Note: We skip this to keep the example simpler, but it's recommended in production
+    
+    // Get the recent blockhash
+    const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash('confirmed');
+    
+    // Create a transaction with all our instructions
+    const tx = new Transaction();
+    tx.add(...instructions);
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = depositor.publicKey;
+    
+    try {
+      // MAX_RETRY_ATTEMPTS for blockhash related issues
+      const MAX_RETRY_ATTEMPTS = 3;
+      let attempt = 0;
+      let lastError: any = null;
+      
+      // Retry loop for handling blockhash issues
+      while (attempt < MAX_RETRY_ATTEMPTS) {
+        attempt++;
+        console.log(`Attempt ${attempt} to deposit to escrow using WSOL flow`);
+        
+        try {
+          // Sign the transaction
+          if (depositor.keypair) {
+            console.log("Signing transaction with keypair");
+            tx.partialSign(depositor.keypair);
+          } else if (depositor.signTransaction) {
+            console.log("Signing transaction with wallet adapter");
+            await depositor.signTransaction(tx);
+          } else {
+            throw new Error("Wallet does not support transaction signing");
+          }
+          
+          // Send the transaction
+          console.log("Sending signed transaction to the network");
+          const rawTransaction = tx.serialize();
+          const txid = await this.connection.sendRawTransaction(rawTransaction, {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed'
+          });
+          
+          console.log("Transaction sent with ID:", txid);
+          
+          // Wait for confirmation with timeout warning
+          const timeoutId = setTimeout(() => {
+            console.log("Transaction confirmation taking longer than expected (15s)...");
+          }, 15000);
+          
+          // Wait for confirmation
+          const confirmation = await this.connection.confirmTransaction({
+            blockhash,
+            lastValidBlockHeight,
+            signature: txid
+          }, 'confirmed');
+          
+          // Clear the timeout
+          clearTimeout(timeoutId);
+          
+          // Check if confirmed successfully
+          if (confirmation.value.err) {
+            console.error("Transaction confirmed but had an error:", confirmation.value.err);
+            throw new Error(`Transaction error: ${JSON.stringify(confirmation.value.err)}`);
+          }
+          
+          console.log("Transaction confirmed successfully!");
+          return; // Success, exit the retry loop
+          
+        } catch (error: any) {
+          lastError = error;
+          console.error(`Attempt ${attempt} failed:`, error);
+          
+          // Only retry for specific errors related to blockhash or signatures
+          if (error.message && (
+              error.message.includes('blockhash') || 
+              error.message.includes('signature') ||
+              error.message.includes('timeout')
+          )) {
+            // Wait a bit before retrying
+            if (attempt < MAX_RETRY_ATTEMPTS) {
+              console.log(`Waiting before retry attempt ${attempt + 1}...`);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              
+              // Get a fresh blockhash for the next attempt
+              const { blockhash: newBlockhash } = await this.connection.getLatestBlockhash('confirmed');
+              console.log(`Got fresh blockhash for retry: ${newBlockhash.substring(0, 8)}...`);
+            }
+          } else {
+            // For other errors, don't retry
+            break;
+          }
+        }
+      }
+      
+      // If we get here, all attempts failed
+      throw lastError || new Error("Failed to deposit after multiple attempts");
+      
+    } catch (error) {
+      console.error("TradeClient.depositTradeEscrow error:", error);
+      throw error; // Re-throw to be handled by the caller
     }
   }
 }
@@ -586,7 +810,7 @@ export const createTrade = async (
       return null;
     }
     
-    // Create the trade
+    // Create the trade using proper maker terminology (wallet is the maker)
     const tradePDA = await client.createTrade(
       anchorWallet,
       offerPDA,
@@ -620,13 +844,15 @@ export const getTrade = async (
     // Convert to a more user-friendly format
     return {
       id: tradePDA.toString(),
-      buyer: trade.buyer ? trade.buyer.toString() : null,
-      seller: trade.seller.toString(),
+      maker: trade.maker.toString(),
+      taker: trade.taker ? trade.taker.toString() : null,
       amount: trade.amount.toNumber() / 1e9, // Convert from lamports to SOL
       price: trade.price.toNumber() / 100, // Assuming price is in cents
       status: trade.status,
       createdAt: new Date(trade.createdAt * 1000),
-      updatedAt: new Date(trade.updatedAt * 1000)
+      updatedAt: new Date(trade.updatedAt * 1000),
+      escrowAccount: trade.escrowAccount,
+      tokenMint: trade.tokenMint
     };
   } catch (error: any) {
     console.error('Error fetching trade:', error);
@@ -640,34 +866,46 @@ export const getUserTrades = async (
   wallet: any
 ): Promise<any[]> => {
   try {
+    console.log("getUserTrades called - wallet:", wallet.publicKey?.toString());
+    
     if (!wallet.publicKey) {
+      console.log("No wallet public key found");
       return [];
     }
     
     const client = await createTradeClient(connection, wallet);
+    console.log("Trade client created successfully");
     
     try {
       const trades = await client.getTradesByUser(wallet.publicKey);
+      console.log("Raw trades fetched:", trades.length);
       
       // Convert to a more user-friendly format
-      return trades.map((trade: any) => ({
-        id: trade.publicKey.toString(),
-        buyer: trade.buyer ? trade.buyer.toString() : null,
-        seller: trade.seller ? trade.seller.toString() : null,
-        amount: trade.amount.toNumber() / 1e9, // Convert from lamports to SOL
-        price: trade.price.toNumber() / 100, // Assuming price is in cents
-        status: trade.status,
-        createdAt: new Date(trade.createdAt * 1000),
-        updatedAt: new Date(trade.updatedAt * 1000)
-      }));
-    } catch (tradeError: any) {
-      console.error('Error in getTradesByUser:', tradeError);
-      toast.error('Error loading trades: ' + (tradeError.message || 'Unknown error'));
+      const formattedTrades = trades.map((trade: any) => {
+        const result = {
+          id: trade.publicKey.toString(),
+          maker: trade.maker ? trade.maker.toString() : null,
+          taker: trade.taker ? trade.taker.toString() : null,
+          amount: trade.amount.toNumber() / 1e9, // Convert from lamports to SOL
+          price: trade.price.toNumber() / 100, // Assuming price is in cents
+          status: trade.status,
+          createdAt: new Date(trade.createdAt * 1000),
+          updatedAt: new Date(trade.updatedAt * 1000)
+        };
+        console.log("Formatted trade:", result);
+        return result;
+      });
+      
+      console.log("Returning formatted trades:", formattedTrades.length);
+      return formattedTrades;
+    } catch (fetchError: any) {
+      console.error('Error fetching trades from client:', fetchError);
+      toast.error(fetchError.message || 'Failed to load trades');
       return [];
     }
   } catch (error: any) {
-    console.error('Error fetching user trades:', error);
-    toast.error(error.message || 'Failed to fetch trade history');
+    console.error('Error in getUserTrades:', error);
+    toast.error(error.message || 'Failed to fetch user trades');
     return [];
   }
 };
@@ -679,7 +917,7 @@ export const acceptTrade = async (
 ): Promise<boolean> => {
   try {
     const client = await createTradeClient(connection, wallet);
-    await client.acceptTrade(tradePDA, wallet);
+    await client.acceptTrade(tradePDA, wallet); // wallet becomes the taker
     toast.success('Trade accepted successfully!');
     return true;
   } catch (error: any) {
@@ -696,7 +934,7 @@ export const completeTrade = async (
 ): Promise<boolean> => {
   try {
     const client = await createTradeClient(connection, wallet);
-    await client.completeTrade(tradePDA, wallet);
+    await client.completeTrade(tradePDA, wallet); // Either maker or taker can complete
     toast.success('Trade completed successfully!');
     return true;
   } catch (error: any) {
@@ -713,7 +951,7 @@ export const cancelTrade = async (
 ): Promise<boolean> => {
   try {
     const client = await createTradeClient(connection, wallet);
-    await client.cancelTrade(tradePDA, wallet);
+    await client.cancelTrade(tradePDA, wallet); // Only maker can cancel
     toast.success('Trade cancelled successfully!');
     return true;
   } catch (error: any) {
@@ -730,7 +968,7 @@ export const disputeTrade = async (
 ): Promise<boolean> => {
   try {
     const client = await createTradeClient(connection, wallet);
-    await client.disputeTrade(tradePDA, wallet);
+    await client.disputeTrade(tradePDA, wallet); // Either maker or taker can dispute
     toast.success('Trade dispute initiated!');
     return true;
   } catch (error: any) {
@@ -748,74 +986,84 @@ export const depositTradeEscrow = async (
   tokenMint: PublicKey,
   amount: number
 ): Promise<boolean> => {
+  console.log(`Starting deposit of ${amount} SOL for trade ${tradePDA.toString()}`);
+  console.log(`Using wallet type: ${wallet.keypair ? 'Local wallet with keypair' : 'Browser wallet'}`);
+  
   try {
     // Prepare a properly formatted wallet object for Anchor
-    let anchorWallet = wallet;
+    const walletForAnchor = wallet.keypair ? {
+      publicKey: wallet.publicKey,
+      signTransaction: async (tx: Transaction) => {
+        tx.partialSign(wallet.keypair);
+        return tx;
+      },
+      signAllTransactions: async (txs: Transaction[]) => {
+        txs.forEach(tx => tx.partialSign(wallet.keypair));
+        return txs;
+      },
+      keypair: wallet.keypair
+    } : wallet;
     
-    // If this is a local wallet with keypair (like from the localWalletStore)
-    if (wallet.keypair) {
-      // Create an Anchor compatible wallet using the keypair
-      anchorWallet = {
-        publicKey: wallet.keypair.publicKey,
-        keypair: wallet.keypair,
-        // Add the signTransaction method that Anchor expects
-        signTransaction: async (tx: any) => {
-          tx.partialSign(wallet.keypair);
-          return tx;
-        },
-        signAllTransactions: async (txs: any[]) => {
-          return txs.map(tx => {
-            tx.partialSign(wallet.keypair);
-            return tx;
-          });
-        }
-      };
+    console.log(`Deposit wallet public key: ${walletForAnchor.publicKey.toString()}`);
+    if (walletForAnchor.keypair) {
+      console.log(`Local wallet keypair details - Secret key length: ${walletForAnchor.keypair.secretKey.length}`);
     }
     
-    // Convert amount to lamports (assuming SOL)
-    const amountBN = new BN(amount * 1e9); // Convert to lamports
+    // Convert SOL amount to lamports
+    const lamports = LAMPORTS_PER_SOL * amount;
+    console.log(`Depositing ${lamports} lamports (${amount} SOL)`);
     
-    // Check if the wallet has enough tokens and airdrop if needed
-    const hasEnoughTokens = await ensureSufficientTokens(
-      connection,
-      anchorWallet,
-      tokenMint,
-      amountBN
-    );
-    
-    if (!hasEnoughTokens) {
-      toast.error('Insufficient tokens to deposit to escrow');
+    // Check if wallet has sufficient tokens for deposit
+    const balance = await connection.getBalance(walletForAnchor.publicKey);
+    if (balance < lamports + 5000) { // Adding buffer for tx fee
+      console.error(`Insufficient balance. Required: ${lamports + 5000}, Available: ${balance}`);
+      toast.error(`Insufficient balance. You need at least ${amount + 0.000005} SOL`);
       return false;
     }
     
-    const client = await createTradeClient(connection, anchorWallet);
+    // Create a trade client
+    const tradeClient = await createTradeClient(connection, walletForAnchor);
+    console.log("Trade client created successfully");
     
-    // Get depositor token account
-    const depositorTokenAccount = await getAssociatedTokenAddress(
-      tokenMint,
-      anchorWallet.publicKey
-    );
+    // Using our full WSOL flow (create ATA, wrap SOL, deposit, etc.)
+    console.log(`Initiating WSOL-based deposit flow for trade: ${tradePDA.toString()}`);
+    console.log(`This will create a token account if needed, wrap SOL, and deposit to escrow`);
     
-    // Fetch the trade to get the escrow account
-    const trade = await client.getTrade(tradePDA);
+    await tradeClient.depositTradeEscrow(tradePDA, walletForAnchor, lamports);
     
-    // Deposit to escrow
-    await client.depositTradeEscrow(
-      tradePDA,
-      anchorWallet,
-      depositorTokenAccount,
-      trade.escrowAccount,
-      amountBN
-    );
-    
-    toast.success('Successfully deposited to escrow!');
+    console.log("Deposit to escrow completed successfully");
+    toast.success("Deposit to escrow completed!");
     return true;
-  } catch (error: any) {
-    console.error('Error depositing to escrow:', error);
     
-    // Parse and display error
-    const errorMessage = error.message || 'Failed to deposit to escrow';
-    toast.error(errorMessage);
+  } catch (error: any) {
+    console.error("Error in depositTradeEscrow:", error);
+    
+    // Handle specific Solana errors
+    if (error.message?.includes("blockhash")) {
+      console.error("Transaction blockhash expired or invalid");
+      toast.error("Transaction timed out. Please try again.");
+    } 
+    else if (error.message?.includes("0x1") || error.message?.includes("custom program error")) {
+      console.error("Program validation error:", error);
+      toast.error("Transaction rejected by program: Account validation failed. Check that you are the correct participant for this trade.");
+    }
+    else if (error.message?.includes("insufficient funds")) {
+      console.error("Insufficient funds for transaction");
+      toast.error("Insufficient funds to complete transaction");
+    }
+    else if (error.message?.includes("Invalid signer")) {
+      console.error("Invalid signer error:", error);
+      toast.error("Invalid wallet for signing this transaction");
+    }
+    else if (error.message?.includes("not recognized as a program")) {
+      console.error("Program ID error:", error);
+      toast.error("Contract program not found on this network");
+    }
+    else {
+      // Generic error
+      toast.error(error.message || "Failed to deposit to escrow");
+    }
+    
     return false;
   }
 }; 

@@ -17,9 +17,9 @@ export class TradeClient {
   }
 
   async createTrade(
-    seller: Keypair,
+    maker: Keypair,
     tokenMint: PublicKey,
-    sellerTokenAccount: PublicKey,
+    makerTokenAccount: PublicKey,
     escrowAccount: Keypair,
     amount: BN,
     price: BN
@@ -27,7 +27,7 @@ export class TradeClient {
     const [tradePDA] = await PublicKey.findProgramAddress(
       [
         Buffer.from("trade"),
-        seller.publicKey.toBuffer(),
+        maker.publicKey.toBuffer(),
         tokenMint.toBuffer(),
       ],
       this.program.programId
@@ -37,15 +37,15 @@ export class TradeClient {
       .createTrade(amount, price)
       .accounts({
         trade: tradePDA,
-        seller: seller.publicKey,
+        maker: maker.publicKey,
         tokenMint,
-        sellerTokenAccount,
+        makerTokenAccount,
         escrowAccount: escrowAccount.publicKey,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         rent: SYSVAR_RENT_PUBKEY,
       })
-      .signers([seller, escrowAccount])
+      .signers([maker, escrowAccount])
       .rpc();
 
     return tradePDA;
@@ -53,65 +53,65 @@ export class TradeClient {
 
   async acceptTrade(
     tradePDA: PublicKey,
-    buyer: Keypair
+    taker: Keypair
   ): Promise<void> {
     await this.program.methods
       .acceptTrade()
       .accounts({
         trade: tradePDA,
-        buyer: buyer.publicKey,
+        taker: taker.publicKey,
       })
-      .signers([buyer])
+      .signers([taker])
       .rpc();
   }
 
   async completeTrade(
     tradePDA: PublicKey,
-    seller: Keypair,
-    buyer: Keypair,
+    maker: Keypair,
+    taker: Keypair,
     escrowAccount: PublicKey,
-    buyerTokenAccount: PublicKey,
+    takerTokenAccount: PublicKey,
     priceOracle: PublicKey,
     priceProgram: PublicKey,
-    buyerProfile: PublicKey,
-    sellerProfile: PublicKey,
+    takerProfile: PublicKey,
+    makerProfile: PublicKey,
     profileProgram: PublicKey
   ): Promise<void> {
     await this.program.methods
       .completeTrade()
       .accounts({
         trade: tradePDA,
-        seller: seller.publicKey,
-        buyer: buyer.publicKey,
+        maker: maker.publicKey,
+        taker: taker.publicKey,
         escrowAccount,
-        buyerTokenAccount,
+        takerTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
         priceOracle,
         priceProgram,
-        buyerProfile,
-        sellerProfile,
+        takerProfile,
+        makerProfile,
         profileProgram,
       })
-      .signers([seller, buyer])
+      .signers([maker, taker])
       .rpc();
   }
 
   async cancelTrade(
     tradePDA: PublicKey,
-    seller: Keypair,
+    maker: Keypair,
     escrowAccount: PublicKey,
-    sellerTokenAccount: PublicKey
+    makerTokenAccount: PublicKey
   ): Promise<void> {
     await this.program.methods
       .cancelTrade()
       .accounts({
         trade: tradePDA,
-        seller: seller.publicKey,
+        maker: maker.publicKey,
         escrowAccount,
-        sellerTokenAccount,
+        makerTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
-      .signers([seller])
+      .signers([maker])
       .rpc();
   }
 
@@ -132,8 +132,8 @@ export class TradeClient {
   async getTrade(tradePDA: PublicKey): Promise<Trade> {
     const account = await this.program.account.trade.fetch(tradePDA);
     return {
-      seller: account.seller,
-      buyer: account.buyer,
+      maker: account.maker,
+      taker: account.taker,
       amount: account.amount,
       price: account.price,
       tokenMint: account.tokenMint,
@@ -146,13 +146,13 @@ export class TradeClient {
   }
 
   async findTradeAddress(
-    seller: PublicKey,
+    maker: PublicKey,
     tokenMint: PublicKey
   ): Promise<[PublicKey, number]> {
     return await PublicKey.findProgramAddress(
       [
         Buffer.from("trade"),
-        seller.toBuffer(),
+        maker.toBuffer(),
         tokenMint.toBuffer(),
       ],
       this.program.programId
@@ -177,6 +177,37 @@ export class TradeClient {
       })
       .signers([depositor])
       .rpc();
+  }
+
+  async getTradesByUser(userPublicKey: PublicKey): Promise<Trade[]> {
+    // Fetch all trades
+    const allTrades = await this.program.account.trade.all();
+    
+    // Filter trades where the user is either the maker or taker
+    return allTrades
+      .filter(account => {
+        const trade = account.account;
+        return (
+          trade.maker.equals(userPublicKey) || 
+          (trade.taker && trade.taker.equals(userPublicKey))
+        );
+      })
+      .map(account => {
+        const trade = account.account;
+        return {
+          publicKey: account.publicKey,
+          maker: trade.maker,
+          taker: trade.taker,
+          amount: trade.amount,
+          price: trade.price,
+          tokenMint: trade.tokenMint,
+          escrowAccount: trade.escrowAccount,
+          status: this.convertTradeStatus(trade.status),
+          createdAt: trade.createdAt.toNumber(),
+          updatedAt: trade.updatedAt.toNumber(),
+          bump: trade.bump,
+        };
+      });
   }
 
   private convertTradeStatus(status: any): TradeStatus {

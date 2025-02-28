@@ -6,19 +6,21 @@ import { useRouter, useParams } from 'next/navigation';
 import { PublicKey, Connection } from '@solana/web3.js';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
-import { getTrade, acceptTrade, completeTrade, cancelTrade, disputeTrade } from '@/utils/tradeService';
+import { getTrade, acceptTrade, completeTrade, cancelTrade, disputeTrade, depositTradeEscrow } from '@/utils/tradeService';
 import { useLocalWalletStore } from '@/utils/localWallets';
 import { TradeStatus } from '@localmoney/solana-sdk';
 
 interface TradeDetails {
   id: string;
-  buyer: string | null;
-  seller: string;
+  maker: string;
+  taker: string | null;
   amount: number;
   price: number;
   status: TradeStatus;
   createdAt: Date;
   updatedAt: Date;
+  tokenMint?: PublicKey;
+  escrowAccount?: PublicKey;
 }
 
 export default function TradeDetails() {
@@ -32,8 +34,8 @@ export default function TradeDetails() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connection, setConnection] = useState<Connection | null>(null);
-  const [isBuyer, setIsBuyer] = useState(false);
-  const [isSeller, setIsSeller] = useState(false);
+  const [isTaker, setIsTaker] = useState(false);
+  const [isMaker, setIsMaker] = useState(false);
   const [userMessage, setUserMessage] = useState<string>('');
 
   useEffect(() => {
@@ -49,22 +51,21 @@ export default function TradeDetails() {
   }, [params.id, connected, connection]);
 
   useEffect(() => {
-    // Check if logged-in user is the buyer or seller
-    if (trade && publicKey) {
+    if (trade) {
       if (isLocalnetMode) {
         const selectedWallet = getSelectedWallet();
         if (selectedWallet) {
           const walletPubkey = selectedWallet.keypair.publicKey.toString();
-          setIsBuyer(trade.buyer === walletPubkey);
-          setIsSeller(trade.seller === walletPubkey);
+          setIsTaker(trade.taker === walletPubkey);
+          setIsMaker(trade.maker === walletPubkey);
         }
       } else {
-        setIsBuyer(trade.buyer === publicKey.toString());
-        setIsSeller(trade.seller === publicKey.toString());
+        setIsTaker(trade.taker === publicKey.toString());
+        setIsMaker(trade.maker === publicKey.toString());
       }
     } else {
-      setIsBuyer(false);
-      setIsSeller(false);
+      setIsTaker(false);
+      setIsMaker(false);
     }
   }, [trade, publicKey, isLocalnetMode, getSelectedWallet]);
 
@@ -73,34 +74,73 @@ export default function TradeDetails() {
       setIsLoading(true);
       setError(null);
       
+      console.log("Starting loadTradeDetails - Mode:", isLocalnetMode ? "localnet" : "mainnet");
+      
       if (!params.id) {
-        setError('Invalid trade ID');
+        console.error("Missing trade ID in route params");
+        setError('Trade ID is missing');
         return;
       }
-
+      
       if (!connection) {
+        console.error("Solana connection not available");
         setError('Solana connection not available');
         return;
       }
-
+      
       // Get the wallet to use
       let wallet;
       
       if (isLocalnetMode) {
         // Use the selected local wallet
         const selectedWallet = getSelectedWallet();
-        if (selectedWallet) {
+        if (selectedWallet && selectedWallet.keypair) {
+          console.log("Using local wallet for loading trade:", 
+            selectedWallet.name || 'Unnamed Wallet', 
+            "Public Key:", selectedWallet.keypair.publicKey.toString());
+          
+          // Ensure the wallet structure is correct
           wallet = {
             publicKey: selectedWallet.keypair.publicKey,
             keypair: selectedWallet.keypair
           };
+          
+          // Verify the keypair structure for debugging
+          console.log("Local wallet keypair details:", 
+            typeof wallet.keypair, 
+            "Has secret key:", !!wallet.keypair.secretKey, 
+            "Secret key length:", wallet.keypair.secretKey ? wallet.keypair.secretKey.length : 0,
+            "Public key length:", wallet.keypair.publicKey.toBytes().length);
+            
+          if (!wallet.keypair.secretKey || wallet.keypair.secretKey.length === 0) {
+            console.warn("CRITICAL: Selected local wallet has invalid keypair (missing secret key)");
+            toast.warning("Selected wallet may not have proper permissions");
+          }
+        } else {
+          const warningMessage = selectedWallet ? 
+            "Selected local wallet has invalid keypair" : 
+            "No local wallet selected";
+          console.warn(warningMessage + ", proceeding in view-only mode");
+          
+          if (selectedWallet && !selectedWallet.keypair) {
+            toast.warning("Selected wallet is missing a keypair (view-only)");
+          } else if (!selectedWallet) {
+            toast.warning("No local wallet selected (view-only mode)");
+          }
+          
+          wallet = {
+            publicKey: null
+          };
         }
-      } else if (publicKey) {
+      } else if (connected && publicKey) {
+        console.log("Using connected wallet for loading trade:", publicKey.toString());
         wallet = {
           publicKey
         };
       } else {
+        console.log("No wallet connected, proceeding in view-only mode");
         // For viewing, we can proceed without a connected wallet
+        toast.info("No wallet connected (view-only mode)");
         wallet = {
           publicKey: null
         };
@@ -110,21 +150,34 @@ export default function TradeDetails() {
       let tradePDA: PublicKey;
       try {
         tradePDA = new PublicKey(params.id);
+        console.log("Successfully parsed trade ID:", tradePDA.toString());
       } catch (error) {
+        console.error("Invalid trade ID format:", params.id, error);
         setError('Invalid trade ID format');
         return;
       }
+      
+      console.log("Fetching trade details for:", tradePDA.toString(), 
+        "with wallet:", wallet.publicKey ? wallet.publicKey.toString() : "none (view-only)");
       
       // Fetch the trade details
       const tradeDetails = await getTrade(connection, wallet, tradePDA);
       
       if (tradeDetails) {
+        console.log("Trade details loaded successfully:", {
+          id: tradeDetails.id,
+          maker: tradeDetails.maker.substring(0, 8) + "...",
+          status: tradeDetails.status,
+          amount: tradeDetails.amount,
+          escrowAccount: tradeDetails.escrowAccount ? tradeDetails.escrowAccount.toString() : "undefined"
+        });
         setTrade(tradeDetails);
       } else {
+        console.error("Trade not found for ID:", tradePDA.toString());
         setError('Trade not found');
       }
     } catch (error: any) {
-      console.error('Error loading trade:', error);
+      console.error('Error loading trade details:', error);
       setError(error.message || 'Failed to load trade details');
     } finally {
       setIsLoading(false);
@@ -143,6 +196,8 @@ export default function TradeDetails() {
 
   const getStatusText = (status: TradeStatus) => {
     switch (status) {
+      case TradeStatus.Created:
+        return 'Created';
       case TradeStatus.Open:
         return 'Open';
       case TradeStatus.InProgress:
@@ -160,6 +215,8 @@ export default function TradeDetails() {
 
   const getStatusColor = (status: TradeStatus) => {
     switch (status) {
+      case TradeStatus.Created:
+        return 'bg-purple-100 text-purple-800';
       case TradeStatus.Open:
         return 'bg-blue-100 text-blue-800';
       case TradeStatus.InProgress:
@@ -178,34 +235,40 @@ export default function TradeDetails() {
   const getInstructions = () => {
     if (!trade) return 'Loading trade details...';
 
-    if (isBuyer) {
+    if (isMaker) {
       switch (trade.status) {
+        case TradeStatus.Created:
+          return 'Please deposit escrow to make this trade available to takers.';
         case TradeStatus.Open:
-          return 'Waiting for the seller to accept this trade.';
+          return 'Your trade is open and waiting for a taker.';
         case TradeStatus.InProgress:
-          return 'Mark as paid once you have sent the payment via the agreed method.';
+          return 'This trade is in progress. Wait for the taker to confirm payment.';
         case TradeStatus.Completed:
-          return 'This trade has been completed. The SOL has been transferred to your wallet.';
+          return 'This trade has been completed successfully.';
         case TradeStatus.Cancelled:
           return 'This trade has been cancelled.';
         case TradeStatus.Disputed:
-          return 'This trade is currently under dispute. Please contact support.';
+          return 'This trade is under dispute. Please contact support.';
       }
-    } else if (isSeller) {
+    }
+
+    if (isTaker) {
       switch (trade.status) {
+        case TradeStatus.Created:
+          return 'Waiting for the maker to deposit escrow.';
         case TradeStatus.Open:
-          return 'Please accept this trade to proceed or cancel if you no longer wish to trade.';
+          return 'Waiting for the maker to accept this trade.';
         case TradeStatus.InProgress:
-          return 'Once you confirm receipt of payment, the SOL will be released to the buyer.';
+          return 'Please send payment to the maker according to the agreed terms.';
         case TradeStatus.Completed:
-          return 'This trade has been completed. The SOL has been transferred to the buyer.';
+          return 'This trade has been completed successfully.';
         case TradeStatus.Cancelled:
           return 'This trade has been cancelled.';
         case TradeStatus.Disputed:
           return 'This trade is currently under dispute. Please contact support.';
       }
     } else {
-      return 'You are viewing this trade as a third party.';
+      return 'You are not a participant in this trade.';
     }
   };
 
@@ -423,13 +486,107 @@ export default function TradeDetails() {
   
   const handleSendMessage = () => {
     if (!userMessage.trim()) {
-      toast.error('Please enter a message');
       return;
     }
     
     // In a real app, we would save this message to the backend
     toast.success('Message feature coming soon!');
     setUserMessage('');
+  };
+
+  const handleDepositEscrow = async () => {
+    if (!trade || !connection) {
+      console.error("Cannot deposit: Trade or connection is missing");
+      toast.error("Cannot deposit: Missing trade or connection");
+      return;
+    }
+    
+    try {
+      setIsSubmitting(true);
+      console.log("Starting deposit escrow flow...");
+      console.log("Trade details:", {
+        id: trade.id,
+        maker: trade.maker.substring(0, 8) + "...",
+        status: trade.status,
+        amount: trade.amount,
+        escrowAccount: trade.escrowAccount ? trade.escrowAccount.toString() : "undefined",
+        tokenMint: trade.tokenMint ? trade.tokenMint.toString() : "undefined"
+      });
+      
+      let wallet;
+      
+      if (isLocalnetMode) {
+        // Use the selected local wallet
+        const selectedWallet = getSelectedWallet();
+        if (selectedWallet && selectedWallet.keypair) {
+          console.log("Using local wallet for deposit:", 
+            selectedWallet.name || 'Unnamed Wallet', 
+            "Public Key:", selectedWallet.keypair.publicKey.toString());
+          
+          // Ensure the wallet structure is correct
+          wallet = {
+            publicKey: selectedWallet.keypair.publicKey,
+            keypair: selectedWallet.keypair
+          };
+          
+          // Verify the keypair structure for debugging
+          console.log("Wallet keypair for deposit:", 
+            typeof wallet.keypair, 
+            "Has secret key:", !!wallet.keypair.secretKey, 
+            "Secret key length:", wallet.keypair.secretKey ? wallet.keypair.secretKey.length : 0,
+            "Public key length:", wallet.keypair.publicKey.toBytes().length);
+        } else {
+          // More detailed error message
+          toast.error(selectedWallet ? 'Selected wallet missing keypair' : 'No local wallet selected');
+          console.error("Local wallet issue:", selectedWallet ? "Missing keypair" : "No wallet selected");
+          setIsSubmitting(false);
+          return;
+        }
+      } else if (connected && publicKey) {
+        console.log("Using connected wallet for deposit:", publicKey.toString());
+        wallet = {
+          publicKey
+        };
+      } else {
+        toast.error('No wallet connected');
+        console.error("No wallet connected for deposit");
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Create a PublicKey from the trade ID
+      const tradePDA = new PublicKey(trade.id);
+      
+      // Get the token mint from the trade if available, otherwise use SOL token mint
+      const tokenMint = trade.tokenMint || new PublicKey('So11111111111111111111111111111111111111112');
+      console.log("Using token mint:", tokenMint.toString());
+      
+      console.log("Starting escrow deposit process with trade:", trade.id);
+      console.log("Amount to deposit:", trade.amount, "SOL");
+      
+      // Deposit the amount specified in the trade
+      const success = await depositTradeEscrow(
+        connection,
+        wallet,
+        tradePDA,
+        tokenMint,
+        trade.amount
+      );
+      
+      if (success) {
+        console.log("Deposit successful, reloading trade details");
+        toast.success('Successfully deposited escrow!');
+        // Reload trade details
+        loadTradeDetails();
+      } else {
+        console.log("Deposit failed");
+      }
+    } catch (error: any) {
+      console.error('Error depositing escrow:', error);
+      toast.error(error.message || 'Failed to deposit escrow');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -491,21 +648,21 @@ export default function TradeDetails() {
                   <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2 break-all">{trade.id}</dd>
                 </div>
                 <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <dt className="text-sm font-medium text-gray-500">Buyer</dt>
+                  <dt className="text-sm font-medium text-gray-500">Maker</dt>
                   <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2 break-all">
-                    {trade.buyer ? (
-                      <>
-                        {trade.buyer} 
-                        {isBuyer && <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">You</span>}
-                      </>
-                    ) : 'Waiting for buyer...'}
+                    {trade.maker}
+                    {isMaker && <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">You</span>}
                   </dd>
                 </div>
                 <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <dt className="text-sm font-medium text-gray-500">Seller</dt>
+                  <dt className="text-sm font-medium text-gray-500">Taker</dt>
                   <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2 break-all">
-                    {trade.seller}
-                    {isSeller && <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">You</span>}
+                    {trade.taker ? (
+                      <>
+                        {trade.taker} 
+                        {isTaker && <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">You</span>}
+                      </>
+                    ) : 'Waiting for taker...'}
                   </dd>
                 </div>
                 <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
@@ -544,63 +701,62 @@ export default function TradeDetails() {
           
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-4 justify-end mb-8">
-            {/* Seller Actions */}
-            {isSeller && (
+            {/* Maker Actions */}
+            {isMaker && (
               <>
                 {trade.status === TradeStatus.Open && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleAcceptTrade}
-                      disabled={isSubmitting}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                    >
-                      {isSubmitting ? 'Processing...' : 'Accept Trade'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCancelTrade}
-                      disabled={isSubmitting}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                    >
-                      {isSubmitting ? 'Processing...' : 'Cancel Trade'}
-                    </button>
-                  </>
+                  <button
+                    onClick={handleCancelTrade}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  >
+                    Cancel Trade
+                  </button>
+                )}
+                {trade.status === TradeStatus.Created && (
+                  <button
+                    onClick={handleDepositEscrow}
+                    disabled={isSubmitting}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    {isSubmitting ? 'Depositing...' : 'Deposit Escrow'}
+                  </button>
                 )}
                 {trade.status === TradeStatus.InProgress && (
                   <>
                     <button
-                      type="button"
                       onClick={handleCompleteTrade}
-                      disabled={isSubmitting}
                       className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                     >
-                      {isSubmitting ? 'Processing...' : 'Release Funds'}
+                      Complete Trade
                     </button>
                     <button
-                      type="button"
                       onClick={handleDisputeTrade}
-                      disabled={isSubmitting}
                       className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
                     >
-                      {isSubmitting ? 'Processing...' : 'Dispute Trade'}
+                      Dispute Trade
                     </button>
                   </>
                 )}
               </>
             )}
             
-            {/* Buyer Actions */}
-            {isBuyer && (
+            {/* Taker Actions */}
+            {isTaker && (
               <>
                 {trade.status === TradeStatus.InProgress && (
                   <button
-                    type="button"
                     onClick={handleDisputeTrade}
-                    disabled={isSubmitting}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
                   >
-                    {isSubmitting ? 'Processing...' : 'Dispute Trade'}
+                    Dispute Trade
+                  </button>
+                )}
+                {trade.status === TradeStatus.Open && !trade.taker && (
+                  <button
+                    onClick={handleAcceptTrade}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Accept Trade
                   </button>
                 )}
               </>

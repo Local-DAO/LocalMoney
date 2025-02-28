@@ -44,8 +44,8 @@ export interface Profile {
 }
 
 export interface Trade {
-  seller: PublicKey;
-  buyer: PublicKey | null;
+  maker: PublicKey;
+  taker: PublicKey | null;
   amount: BN;
   price: BN;
   tokenMint: PublicKey;

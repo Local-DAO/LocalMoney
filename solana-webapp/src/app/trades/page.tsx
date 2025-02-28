@@ -12,8 +12,8 @@ import { TradeStatus } from '@localmoney/solana-sdk';
 
 interface Trade {
   id: string;
-  buyer: string | null;
-  seller: string;
+  maker: string;
+  taker: string | null;
   amount: number;
   price: number;
   status: TradeStatus;
@@ -153,8 +153,8 @@ export default function Trades() {
       userAddress = publicKey!.toString();
     }
     
-    if (trade.buyer === userAddress) return 'Buyer';
-    if (trade.seller === userAddress) return 'Seller';
+    if (trade.maker === userAddress) return 'Maker';
+    if (trade.taker === userAddress) return 'Taker';
     return 'Unknown';
   };
 
