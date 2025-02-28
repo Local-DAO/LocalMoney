@@ -199,15 +199,25 @@ export const getAllOffers = async (
           // Use the SDK to deserialize the account data
           const offerData = await offerClient.getOffer(pubkey);
           
+          // Get the correct type
+          let isBuy = false;
+          
+          // We need to check the type properly as it might be an enum
+          if (typeof offerData.offerType === 'number') {
+            isBuy = offerData.offerType === 0; // OfferType.Buy
+          } else if (offerData.offerType === OfferType.Buy) {
+            isBuy = true;
+          }
+          
           return {
             id: pubkey.toString(),
             creator: offerData.maker.toString(),
-            price: offerData.pricePerToken.toNumber() / 100, // Convert from cents to dollars
-            minAmount: offerData.minAmount.toNumber() / 1e9, // Convert from lamports to SOL
-            maxAmount: offerData.maxAmount.toNumber() / 1e9, // Convert from lamports to SOL
+            price: offerData.pricePerToken.toNumber(), // Don't divide by 100 as the price is already in correct units
+            minAmount: offerData.minAmount.toNumber() / 1e6, // Adjust the conversion factor for proper SOL display
+            maxAmount: offerData.maxAmount.toNumber() / 1e6, // Adjust the conversion factor for proper SOL display
             currency: 'USD', // This would come from the offer in a real implementation
             paymentMethods: ['Bank Transfer'], // This would come from the offer in a real implementation
-            isBuy: offerData.offerType === OfferType.Buy,
+            isBuy: isBuy,
             createdAt: new Date(offerData.createdAt * 1000), // Convert from seconds to milliseconds
             status: offerData.status
           };
@@ -237,15 +247,37 @@ export const getOffer = async (
     const offerClient = await createOfferClient(connection, wallet);
     const offer = await offerClient.getOffer(offerPDA);
     
+    // Log raw values for debugging
+    console.log('Raw offer values:', {
+      pricePerToken: offer.pricePerToken.toString(),
+      minAmount: offer.minAmount.toString(),
+      maxAmount: offer.maxAmount.toString(),
+      offerType: offer.offerType,
+      rawOfferType: JSON.stringify(offer.offerType)
+    });
+    
+    // Get the correct type
+    let isBuy = false;
+    
+    // We need to check the type properly as it might be an enum
+    // OfferType.Buy should be 0 and OfferType.Sell should be 1 based on standard enum patterns
+    if (typeof offer.offerType === 'number') {
+      isBuy = offer.offerType === 0; // OfferType.Buy
+    } else if (offer.offerType === OfferType.Buy) {
+      isBuy = true;
+    } else {
+      console.log('Unknown offer type format:', offer.offerType);
+    }
+    
     return {
       id: offerPDA.toString(),
       creator: offer.maker.toString(),
-      price: offer.pricePerToken.toNumber() / 100, // Convert from cents to dollars
-      minAmount: offer.minAmount.toNumber() / 1e9, // Convert from lamports to SOL
-      maxAmount: offer.maxAmount.toNumber() / 1e9, // Convert from lamports to SOL
+      price: offer.pricePerToken.toNumber(), // Don't divide by 100 as the price is already in correct units
+      minAmount: offer.minAmount.toNumber() / 1e6, // Adjust the conversion factor for proper SOL display
+      maxAmount: offer.maxAmount.toNumber() / 1e6, // Adjust the conversion factor for proper SOL display
       currency: 'USD', // This would come from the offer in a real implementation
       paymentMethods: ['Bank Transfer'], // This would come from the offer in a real implementation
-      isBuy: offer.offerType === OfferType.Buy,
+      isBuy: isBuy,
       createdAt: new Date(offer.createdAt * 1000), // Convert from seconds to milliseconds
       status: offer.status
     };
@@ -268,10 +300,28 @@ export const updateOffer = async (
   try {
     const offerClient = await createOfferClient(connection, wallet);
     
-    // Convert values to BN
-    const priceBN = price ? new BN(Math.floor(price * 100)) : undefined; // Price in cents
-    const minAmountBN = minAmount ? new BN(Math.floor(minAmount * 1e9)) : undefined;
-    const maxAmountBN = maxAmount ? new BN(Math.floor(maxAmount * 1e9)) : undefined;
+    // Log values for debugging
+    console.log('Updating offer with values:', { price, minAmount, maxAmount });
+    
+    // Convert values to BN with the correct conversion factors
+    // The price is in whole units (dollars, not cents)
+    const priceBN = price !== undefined ? new BN(price) : undefined;
+    
+    // The amounts are in SOL, need to convert to lamports
+    const minAmountBN = minAmount !== undefined ? new BN(Math.floor(minAmount * 1e6)) : undefined;
+    const maxAmountBN = maxAmount !== undefined ? new BN(Math.floor(maxAmount * 1e6)) : undefined;
+    
+    // Log converted values for debugging
+    console.log('Converted values:', { 
+      priceBN: priceBN?.toString(), 
+      minAmountBN: minAmountBN?.toString(), 
+      maxAmountBN: maxAmountBN?.toString() 
+    });
+    
+    if (!wallet.keypair) {
+      toast.error('Cannot update offer: wallet keypair not available');
+      return false;
+    }
     
     await offerClient.updateOffer(
       offerPDA,
@@ -282,9 +332,20 @@ export const updateOffer = async (
     );
     
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating offer:', error);
-    toast.error('Failed to update offer');
+    
+    // More detailed error handling
+    if (error.logs && error.logs.some((log: string) => log.includes('0x1'))) {
+      toast.error('Insufficient funds to update offer');
+    } else if (error.message && error.message.includes('not owned by signer')) {
+      toast.error('You are not authorized to update this offer');
+    } else if (error.message) {
+      toast.error(`Failed to update offer: ${error.message}`);
+    } else {
+      toast.error('Failed to update offer: Unknown error');
+    }
+    
     return false;
   }
 };

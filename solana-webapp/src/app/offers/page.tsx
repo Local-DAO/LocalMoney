@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { getAllOffers } from '@/utils/offerService';
 import { useLocalWalletStore } from '@/utils/localWallets';
+import { Connection } from '@solana/web3.js';
 
 interface Offer {
   id: string;
@@ -20,23 +21,40 @@ interface Offer {
 
 export default function Offers() {
   const router = useRouter();
-  const { publicKey, connected, connection, signTransaction } = useWallet();
+  const { publicKey, connected, signTransaction } = useWallet();
   const { getSelectedWallet, isLocalnetMode } = useLocalWalletStore();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Initialize connection
+  const [connection, setConnection] = useState<Connection | null>(null);
+  
+  useEffect(() => {
+    // Set up connection when component mounts
+    const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'http://localhost:8899';
+    setConnection(new Connection(rpcUrl, 'confirmed'));
+  }, []);
 
   useEffect(() => {
     // Load offers when component mounts or wallet connects
-    loadOffers();
+    if (connection) {
+      loadOffers();
+    }
   }, [connected, connection]);
 
   const loadOffers = async () => {
     try {
       setIsLoading(true);
       
+      // Check for connection
+      if (!connection) {
+        console.error('Connection not available');
+        toast.error('Solana connection not available');
+        return;
+      }
+      
       // Get the wallet to use
       let wallet;
-      let effectiveConnection = connection;
       
       if (isLocalnetMode) {
         // Use the selected local wallet
@@ -47,24 +65,20 @@ export default function Offers() {
             keypair: selectedWallet.keypair
           };
         }
-        
-        // For localnet mode, we need to create our own connection if the one from useWallet isn't available
-        if (!effectiveConnection) {
-          console.warn('Connection not available from useWallet, creating a new one');
-          const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'http://localhost:8899';
-          const { Connection } = require('@solana/web3.js');
-          effectiveConnection = new Connection(rpcUrl, 'confirmed');
-        }
       } else if (publicKey) {
         wallet = {
-          publicKey,
-          signTransaction
+          publicKey
+        };
+      } else {
+        // For viewing offers, we can proceed with a null publicKey
+        wallet = {
+          publicKey: null
         };
       }
       
       // Use the offer service to fetch offers
       const fetchedOffers = await getAllOffers(
-        effectiveConnection,
+        connection,
         wallet
       );
       
@@ -199,7 +213,7 @@ export default function Offers() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
-                      onClick={() => toast.success(`View offer ${offer.id} feature coming soon!`)}
+                      onClick={() => router.push(`/offers/${offer.id}`)}
                       className="text-indigo-600 hover:text-indigo-900 mr-4"
                     >
                       View
