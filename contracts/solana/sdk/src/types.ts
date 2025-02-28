@@ -44,6 +44,7 @@ export interface Profile {
 }
 
 export interface Trade {
+  publicKey?: PublicKey;
   maker: PublicKey;
   taker: PublicKey | null;
   amount: BN;

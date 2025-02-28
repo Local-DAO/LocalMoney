@@ -475,8 +475,7 @@ describe("trade", () => {
       await tradeClient.acceptTrade(tradePDA2, testTaker);
     });
 
-    // SKIP failing tests for now
-    it.skip("should retrieve all trades for a maker", async () => {
+    it("should retrieve all trades for a maker", async () => {
       const makerTrades = await tradeClient.getTradesByUser(testMaker.publicKey);
       
       expect(makerTrades.length).to.be.at.least(1);
@@ -490,7 +489,7 @@ describe("trade", () => {
       expect(found).to.be.true;
     });
 
-    it.skip("should retrieve all trades for a taker", async () => {
+    it("should retrieve all trades for a taker", async () => {
       const takerTrades = await tradeClient.getTradesByUser(testTaker.publicKey);
       
       expect(takerTrades.length).to.be.at.least(1);
@@ -503,7 +502,7 @@ describe("trade", () => {
       expect(found).to.be.true;
     });
 
-    it.skip("should retrieve trades for both roles", async () => {
+    it("should retrieve trades for both roles", async () => {
       // Create a third trade where roles are swapped
       const escrowAccount3 = Keypair.generate();
       const tradePDA3 = await tradeClient.createTrade(
