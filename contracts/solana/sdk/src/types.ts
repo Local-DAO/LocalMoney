@@ -14,8 +14,7 @@ export interface PriceRoute {
 
 export enum TradeStatus {
   Created = 'created',
-  Open = 'open',
-  InProgress = 'inProgress',
+  EscrowDeposited = 'escrowDeposited',
   Completed = 'completed',
   Cancelled = 'cancelled',
   Disputed = 'disputed'
@@ -46,7 +45,7 @@ export interface Profile {
 export interface Trade {
   publicKey?: PublicKey;
   maker: PublicKey;
-  taker: PublicKey | null;
+  taker: PublicKey;
   amount: BN;
   price: BN;
   tokenMint: PublicKey;

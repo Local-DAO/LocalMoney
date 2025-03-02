@@ -1,6 +1,5 @@
 import { Program, AnchorProvider, Idl, BN } from '@project-serum/anchor';
 import { Connection, Keypair, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Offer, OfferStatus, OfferType } from '../types';
 
 export class OfferClient {
@@ -24,24 +23,21 @@ export class OfferClient {
     maxAmount: BN,
     offerType: OfferType
   ): Promise<PublicKey> {
-    const [offerPDA] = await PublicKey.findProgramAddress(
-      [
-        Buffer.from("offer"), 
-        maker.publicKey.toBuffer(),
-        tokenMint.toBuffer(),
-        Buffer.from([offerType === OfferType.Buy ? 0 : 1]),
-        minAmount.toArrayLike(Buffer, 'le', 8),
-        maxAmount.toArrayLike(Buffer, 'le', 8)
-      ],
-      this.program.programId
+    // Get the PDA with consistent seed derivation
+    const [offerPDA] = await this.findOfferAddress(
+      maker.publicKey,
+      tokenMint,
+      offerType,
+      minAmount,
+      maxAmount
     );
 
     await this.program.methods
-      .createOffer(pricePerToken, minAmount, maxAmount, { [offerType]: {} })
+      .createOffer(pricePerToken, minAmount, maxAmount, { [offerType === OfferType.Buy ? 'buy' : 'sell']: {} })
       .accounts({
         offer: offerPDA,
         maker: maker.publicKey,
-        tokenMint,
+        tokenMint: tokenMint,
         systemProgram: SystemProgram.programId,
         rent: SYSVAR_RENT_PUBKEY
       })
@@ -110,47 +106,6 @@ export class OfferClient {
       .rpc();
   }
 
-  async takeOffer(
-    offerPDA: PublicKey,
-    maker: PublicKey,
-    tokenMint: PublicKey,
-    tradePDA: PublicKey,
-    taker: Keypair,
-    tradeProgram: PublicKey,
-    amount: BN
-  ): Promise<void> {
-    await this.program.methods
-      .takeOffer(amount)
-      .accounts({
-        offer: offerPDA,
-        maker,
-        tokenMint,
-        trade: tradePDA,
-        taker: taker.publicKey,
-        tradeProgram,
-      })
-      .signers([taker])
-      .rpc();
-  }
-
-  async depositEscrow(
-    offerPDA: PublicKey,
-    tradePDA: PublicKey,
-    depositor: Keypair,
-    tradeProgram: PublicKey
-  ): Promise<void> {
-    await this.program.methods
-      .depositEscrow()
-      .accounts({
-        offer: offerPDA,
-        trade: tradePDA,
-        depositor: depositor.publicKey,
-        tradeProgram,
-      })
-      .signers([depositor])
-      .rpc();
-  }
-
   async getOffer(offerPDA: PublicKey): Promise<Offer> {
     const account = await this.program.account.offer.fetch(offerPDA);
     return {
@@ -173,14 +128,25 @@ export class OfferClient {
     minAmount: BN, 
     maxAmount: BN
   ): Promise<[PublicKey, number]> {
+    // Convert offer type to u8 (0 for Buy, 1 for Sell) - matches Rust to_u8()
+    const offerTypeByte = Buffer.alloc(1);
+    offerTypeByte.writeUInt8(offerType === OfferType.Buy ? 0 : 1, 0);
+    
+    // Convert amounts to little-endian bytes to match to_le_bytes() in Rust
+    const minAmountBuffer = Buffer.alloc(8);
+    minAmountBuffer.writeBigUInt64LE(BigInt(minAmount.toString()), 0);
+    
+    const maxAmountBuffer = Buffer.alloc(8);
+    maxAmountBuffer.writeBigUInt64LE(BigInt(maxAmount.toString()), 0);
+    
     return await PublicKey.findProgramAddress(
       [
         Buffer.from("offer"), 
         maker.toBuffer(),
         tokenMint.toBuffer(),
-        Buffer.from([offerType === OfferType.Buy ? 0 : 1]),
-        minAmount.toArrayLike(Buffer, 'le', 8),
-        maxAmount.toArrayLike(Buffer, 'le', 8)
+        offerTypeByte,
+        minAmountBuffer,
+        maxAmountBuffer
       ],
       this.program.programId
     );

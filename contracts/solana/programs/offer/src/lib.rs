@@ -1,7 +1,5 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::Mint;
-use trade::program::Trade as TradeProgram;
-use trade::{self, Trade};
 
 declare_id!("FSnCsffRYjRwbpzFCkbwSFtgfSNbxrpYUsq84opqG4wW");
 
@@ -103,26 +101,6 @@ pub mod offer {
         msg!("Offer closed successfully");
         Ok(())
     }
-
-    pub fn take_offer(ctx: Context<TakeOffer>, amount: u64) -> Result<()> {
-        // Validate offer status and amounts
-        require!(
-            ctx.accounts.offer.status == OfferStatus::Active,
-            OfferError::InvalidStatus
-        );
-        require!(amount > 0, OfferError::InvalidAmount);
-        require!(
-            amount >= ctx.accounts.offer.min_amount && amount <= ctx.accounts.offer.max_amount,
-            OfferError::InvalidAmount
-        );
-
-        // Update offer state
-        let offer = &mut ctx.accounts.offer;
-        offer.updated_at = Clock::get()?.unix_timestamp;
-
-        msg!("Offer taken successfully for {} tokens", amount);
-        Ok(())
-    }
 }
 
 #[derive(Accounts)]
@@ -186,73 +164,6 @@ pub struct OfferStatusUpdate<'info> {
     )]
     pub offer: Account<'info, Offer>,
     pub maker: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct TakeOffer<'info> {
-    #[account(
-        mut,
-        has_one = maker,
-        has_one = token_mint,
-        constraint = offer.status == OfferStatus::Active,
-        seeds = [
-            b"offer", 
-            maker.key().as_ref(),
-            token_mint.key().as_ref(),
-            &offer.offer_type.to_u8().to_le_bytes(),
-            &offer.min_amount.to_le_bytes(),
-            &offer.max_amount.to_le_bytes()
-        ],
-        bump
-    )]
-    pub offer: Account<'info, Offer>,
-
-    /// CHECK: We're only reading the maker pubkey field, no need for additional checks
-    pub maker: AccountInfo<'info>,
-
-    pub token_mint: Account<'info, Mint>,
-
-    #[account(
-        seeds = [b"trade", maker.key().as_ref(), token_mint.key().as_ref()],
-        bump,
-        seeds::program = trade_program.key()
-    )]
-    pub trade: Account<'info, Trade>,
-
-    #[account(mut)]
-    pub taker: Signer<'info>,
-
-    pub trade_program: Program<'info, TradeProgram>,
-}
-
-#[derive(Accounts)]
-pub struct DepositEscrow<'info> {
-    #[account(
-        mut,
-        constraint = offer.status == OfferStatus::Active,
-        seeds = [
-            b"offer", 
-            offer.maker.as_ref(),
-            offer.token_mint.as_ref(),
-            &offer.offer_type.to_u8().to_le_bytes(),
-            &offer.min_amount.to_le_bytes(),
-            &offer.max_amount.to_le_bytes()
-        ],
-        bump
-    )]
-    pub offer: Account<'info, Offer>,
-
-    #[account(
-        constraint = trade.token_mint == offer.token_mint,
-        seeds = [b"trade", offer.maker.as_ref(), offer.token_mint.as_ref()],
-        bump,
-        seeds::program = trade_program.key()
-    )]
-    pub trade: Account<'info, Trade>,
-
-    pub depositor: Signer<'info>,
-
-    pub trade_program: Program<'info, TradeProgram>,
 }
 
 #[account]

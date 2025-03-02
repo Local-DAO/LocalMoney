@@ -18,7 +18,7 @@ pub mod trade {
     pub fn create_trade(ctx: Context<CreateTrade>, amount: u64, price: u64) -> Result<()> {
         let trade = &mut ctx.accounts.trade;
         trade.maker = ctx.accounts.maker.key();
-        trade.taker = None;
+        trade.taker = ctx.accounts.taker.key();
         trade.amount = amount;
         trade.price = price;
         trade.token_mint = ctx.accounts.token_mint.key();
@@ -32,53 +32,35 @@ pub mod trade {
         Ok(())
     }
 
-    pub fn accept_trade(ctx: Context<AcceptTrade>) -> Result<()> {
-        let trade = &mut ctx.accounts.trade;
-        require!(
-            trade.status == TradeStatus::Open,
-            TradeError::InvalidTradeStatus
-        );
-
-        trade.taker = Some(ctx.accounts.taker.key());
-        trade.status = TradeStatus::InProgress;
-        trade.updated_at = Clock::get()?.unix_timestamp;
-
-        msg!("Trade accepted successfully");
-        Ok(())
-    }
-
     pub fn complete_trade(ctx: Context<CompleteTrade>) -> Result<()> {
         require!(
-            ctx.accounts.trade.status == TradeStatus::InProgress,
+            ctx.accounts.trade.status == TradeStatus::EscrowDeposited,
             TradeError::InvalidTradeStatus
         );
-
-        // Verify price using CPI
-        let cpi_program = ctx.accounts.price_program.to_account_info();
-        let cpi_accounts = price::cpi::accounts::VerifyPrice {
-            oracle: ctx.accounts.price_oracle.to_account_info(),
-        };
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-
-        // Call verify_price_for_trade with the correct parameters
-        price::cpi::verify_price_for_trade(
-            cpi_ctx,
-            ctx.accounts.trade.price,
-            "USD".to_string(),
-            100, // 1% tolerance
-        )?;
 
         // Transfer tokens from escrow to taker
         let trade_account_info = ctx.accounts.trade.to_account_info();
         let maker_key = ctx.accounts.maker.key();
         let token_mint = ctx.accounts.trade.token_mint;
-        let seeds = &[
+        let taker_key = ctx.accounts.taker.key();
+        let amount = ctx.accounts.trade.amount;
+
+        // Store the amount bytes in a variable to prevent temporary value dropped error
+        let amount_bytes = amount.to_le_bytes();
+
+        // Convert the bump to a byte array for seeds
+        let bump = ctx.accounts.trade.bump;
+
+        // Create seed arrays using Anchor's convenience macro
+        let trade_pda_seed = [
             b"trade",
+            taker_key.as_ref(),
             maker_key.as_ref(),
             token_mint.as_ref(),
-            &[ctx.accounts.trade.bump],
+            &amount_bytes[..],
+            &[bump],
         ];
-        let signer = &[&seeds[..]];
+        let seeds = &[&trade_pda_seed[..]];
         let transfer_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             token::Transfer {
@@ -86,9 +68,10 @@ pub mod trade {
                 to: ctx.accounts.taker_token_account.to_account_info(),
                 authority: trade_account_info,
             },
-            signer,
+            seeds,
         );
-        token::transfer(transfer_ctx, ctx.accounts.trade.amount)?;
+
+        token::transfer(transfer_ctx, amount)?;
 
         // Update profiles using CPI
         let taker_profile_ctx = CpiContext::new(
@@ -122,36 +105,16 @@ pub mod trade {
 
     pub fn cancel_trade(ctx: Context<CancelTrade>) -> Result<()> {
         // Verify trade status and store values we need
-        let bump;
-        let token_mint;
-        let amount;
-        {
-            let trade = &ctx.accounts.trade;
-            require!(
-                trade.status == TradeStatus::Open,
-                TradeError::InvalidTradeStatus
-            );
-            bump = trade.bump;
-            token_mint = trade.token_mint;
-            amount = trade.amount;
-        }
-
-        let maker_key = ctx.accounts.maker.key();
-        let trade_account_info = ctx.accounts.trade.to_account_info();
-
-        // Return tokens from escrow to maker
-        let seeds = &[b"trade", maker_key.as_ref(), token_mint.as_ref(), &[bump]];
-        let signer = &[&seeds[..]];
-        let transfer_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            token::Transfer {
-                from: ctx.accounts.escrow_account.to_account_info(),
-                to: ctx.accounts.maker_token_account.to_account_info(),
-                authority: trade_account_info,
-            },
-            signer,
+        let trade = &ctx.accounts.trade;
+        require!(
+            trade.status == TradeStatus::Created,
+            TradeError::InvalidTradeStatus
         );
-        token::transfer(transfer_ctx, amount)?;
+        // Require the signer is the taker or the maker
+        require!(
+            ctx.accounts.trader.key() == trade.taker || ctx.accounts.trader.key() == trade.maker,
+            TradeError::UnauthorizedTrader
+        );
 
         // Update trade status
         let trade = &mut ctx.accounts.trade;
@@ -168,12 +131,12 @@ pub mod trade {
         // Verify disputer is either taker or maker
         let disputer_key = ctx.accounts.disputer.key();
         require!(
-            trade.maker == disputer_key || trade.taker == Some(disputer_key),
+            trade.maker == disputer_key || trade.taker == disputer_key,
             TradeError::UnauthorizedDisputer
         );
 
         require!(
-            trade.status == TradeStatus::InProgress,
+            trade.status == TradeStatus::EscrowDeposited,
             TradeError::InvalidTradeStatus
         );
 
@@ -212,7 +175,7 @@ pub mod trade {
         );
 
         // Update trade status to Open after deposit
-        trade.status = TradeStatus::Open;
+        trade.status = TradeStatus::EscrowDeposited;
         trade.updated_at = Clock::get()?.unix_timestamp;
 
         msg!("Deposited {} tokens to escrow, trade is now open", amount);
@@ -223,8 +186,7 @@ pub mod trade {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
 pub enum TradeStatus {
     Created,
-    Open,
-    InProgress,
+    EscrowDeposited,
     Completed,
     Cancelled,
     Disputed,
@@ -233,7 +195,7 @@ pub enum TradeStatus {
 #[account]
 pub struct Trade {
     pub maker: Pubkey,
-    pub taker: Option<Pubkey>,
+    pub taker: Pubkey,
     pub amount: u64,
     pub price: u64,
     pub token_mint: Pubkey,
@@ -249,10 +211,10 @@ pub struct Trade {
 pub struct CreateTrade<'info> {
     #[account(
         init,
-        payer = maker,
+        payer = taker,
         space = 8 + // discriminator
             32 + // maker
-            (1 + 32) + // taker (Option<Pubkey>) - 1 for the tag, 32 for the pubkey
+            32 + // taker
             8 + // amount
             8 + // price
             32 + // token_mint
@@ -262,18 +224,21 @@ pub struct CreateTrade<'info> {
             8 + // updated_at
             1 + // bump
             64, // padding for future updates
-        seeds = [b"trade", maker.key().as_ref(), token_mint.key().as_ref()],
+        seeds = [b"trade", taker.key().as_ref(), maker.key().as_ref(), 
+            token_mint.key().as_ref(), amount.to_le_bytes().as_ref()],
         bump
     )]
     pub trade: Account<'info, Trade>,
+    /// CHECK: trade is initialized by the taker
+    pub maker: AccountInfo<'info>,
     #[account(mut)]
-    pub maker: Signer<'info>,
+    pub taker: Signer<'info>,
     pub token_mint: Account<'info, token::Mint>,
     #[account(mut)]
     pub maker_token_account: Account<'info, token::TokenAccount>,
     #[account(
         init,
-        payer = maker,
+        payer = taker,
         token::mint = token_mint,
         token::authority = trade,
     )]
@@ -282,37 +247,33 @@ pub struct CreateTrade<'info> {
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
 }
-
-#[derive(Accounts)]
-pub struct AcceptTrade<'info> {
-    #[account(mut)]
-    pub trade: Account<'info, Trade>,
-    pub taker: Signer<'info>,
-}
-
 #[derive(Accounts)]
 pub struct CompleteTrade<'info> {
     #[account(
         mut,
-        seeds = [b"trade", maker.key().as_ref(), trade.token_mint.as_ref()],
+        seeds = [b"trade", trade.taker.key().as_ref(), trade.maker.key().as_ref(), trade.token_mint.as_ref(), trade.amount.to_le_bytes().as_ref()],
         bump,
     )]
     pub trade: Account<'info, Trade>,
+    #[account(constraint = trader.key() == trade.maker || trader.key() == trade.taker)]
+    pub trader: Signer<'info>,
+    /// CHECK: trade.taker is validated in the trade program
+    #[account(constraint = taker.key() == trade.taker)]
+    pub taker: AccountInfo<'info>,
+    /// CHECK: trade.maker is validated in the trade program
     #[account(constraint = maker.key() == trade.maker)]
-    pub maker: Signer<'info>,
-    #[account(constraint = taker.key() == trade.taker.unwrap())]
-    pub taker: Signer<'info>,
+    pub maker: AccountInfo<'info>,
     #[account(
         mut,
         constraint = escrow_account.key() == trade.escrow_account
     )]
-    pub escrow_account: Box<Account<'info, token::TokenAccount>>,
+    pub escrow_account: Account<'info, token::TokenAccount>,
     #[account(
         mut,
         constraint = taker_token_account.mint == trade.token_mint,
         constraint = taker_token_account.owner == taker.key()
     )]
-    pub taker_token_account: Box<Account<'info, token::TokenAccount>>,
+    pub taker_token_account: Account<'info, token::TokenAccount>,
     pub token_program: Program<'info, Token>,
 
     // Price verification accounts with proper constraints
@@ -341,24 +302,13 @@ pub struct CompleteTrade<'info> {
 pub struct CancelTrade<'info> {
     #[account(
         mut,
-        seeds = [b"trade", maker.key().as_ref(), trade.token_mint.as_ref()],
+        seeds = [b"trade", trade.taker.as_ref(), trade.maker.as_ref(), 
+                trade.token_mint.as_ref(), trade.amount.to_le_bytes().as_ref()],
         bump = trade.bump,
     )]
     pub trade: Account<'info, Trade>,
-    #[account(constraint = maker.key() == trade.maker)]
-    pub maker: Signer<'info>,
-    #[account(
-        mut,
-        constraint = escrow_account.key() == trade.escrow_account
-    )]
-    pub escrow_account: Box<Account<'info, token::TokenAccount>>,
-    #[account(
-        mut,
-        constraint = maker_token_account.mint == trade.token_mint,
-        constraint = maker_token_account.owner == maker.key()
-    )]
-    pub maker_token_account: Box<Account<'info, token::TokenAccount>>,
-    pub token_program: Program<'info, Token>,
+    #[account(constraint = trader.key() == trade.taker || trader.key() == trade.maker)]
+    pub trader: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -385,7 +335,7 @@ pub struct DepositEscrow<'info> {
     #[account(
         mut,
         constraint = depositor_token_account.mint == trade.token_mint,
-        constraint = depositor_token_account.owner == depositor.key()
+        constraint = depositor.key() == trade.maker || depositor.key() == trade.taker
     )]
     pub depositor_token_account: Account<'info, token::TokenAccount>,
 
@@ -400,4 +350,6 @@ pub enum TradeError {
     UnauthorizedDisputer,
     #[msg("Unauthorized to deposit to this trade's escrow")]
     UnauthorizedDepositor,
+    #[msg("Unauthorized trader")]
+    UnauthorizedTrader,
 }

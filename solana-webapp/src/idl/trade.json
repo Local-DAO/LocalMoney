@@ -12,6 +12,11 @@
         },
         {
           "name": "maker",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "taker",
           "isMut": true,
           "isSigner": true
         },
@@ -58,22 +63,6 @@
       ]
     },
     {
-      "name": "acceptTrade",
-      "accounts": [
-        {
-          "name": "trade",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "taker",
-          "isMut": false,
-          "isSigner": true
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "completeTrade",
       "accounts": [
         {
@@ -82,14 +71,19 @@
           "isSigner": false
         },
         {
-          "name": "maker",
+          "name": "trader",
           "isMut": false,
           "isSigner": true
         },
         {
           "name": "taker",
           "isMut": false,
-          "isSigner": true
+          "isSigner": false
+        },
+        {
+          "name": "maker",
+          "isMut": false,
+          "isSigner": false
         },
         {
           "name": "escrowAccount",
@@ -143,24 +137,9 @@
           "isSigner": false
         },
         {
-          "name": "maker",
+          "name": "trader",
           "isMut": false,
           "isSigner": true
-        },
-        {
-          "name": "escrowAccount",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "makerTokenAccount",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
         }
       ],
       "args": []
@@ -230,9 +209,7 @@
           },
           {
             "name": "taker",
-            "type": {
-              "option": "publicKey"
-            }
+            "type": "publicKey"
           },
           {
             "name": "amount",
@@ -282,10 +259,7 @@
             "name": "Created"
           },
           {
-            "name": "Open"
-          },
-          {
-            "name": "InProgress"
+            "name": "EscrowDeposited"
           },
           {
             "name": "Completed"
@@ -315,6 +289,11 @@
       "code": 6002,
       "name": "UnauthorizedDepositor",
       "msg": "Unauthorized to deposit to this trade's escrow"
+    },
+    {
+      "code": 6003,
+      "name": "UnauthorizedTrader",
+      "msg": "Unauthorized trader"
     }
   ],
   "metadata": {

@@ -3,7 +3,6 @@ import { PublicKey, Keypair } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { expect } from "chai";
 import { OfferClient } from "../sdk/src/clients/offer";
-import { TradeClient } from "../sdk/src/clients/trade";
 import { airdropSol, delay, createTokenMint, createTokenAccount, mintTokens, getTokenBalance } from "../sdk/src/utils";
 import * as dotenv from "dotenv";
 import { OfferType } from "../sdk/src/types";
@@ -12,8 +11,8 @@ import { OfferType } from "../sdk/src/types";
 dotenv.config();
 
 describe("offer", () => {
-  if (!process.env.OFFER_PROGRAM_ID || !process.env.TRADE_PROGRAM_ID) {
-    throw new Error("Required program IDs not found in environment. Make sure OFFER_PROGRAM_ID and TRADE_PROGRAM_ID are set.");
+  if (!process.env.OFFER_PROGRAM_ID ) {
+    throw new Error("Required program IDs not found in environment. Make sure OFFER_PROGRAM_ID is set.");
   }
 
   // Configure the client to use the local cluster
@@ -21,10 +20,8 @@ describe("offer", () => {
   anchor.setProvider(provider);
 
   const OFFER_PROGRAM_ID = new PublicKey(process.env.OFFER_PROGRAM_ID);
-  const TRADE_PROGRAM_ID = new PublicKey(process.env.TRADE_PROGRAM_ID);
 
   let offerClient: OfferClient;
-  let tradeClient: TradeClient;
   
   // Generate keypairs for our test
   const creator = Keypair.generate();
@@ -39,11 +36,9 @@ describe("offer", () => {
   before(async () => {
     // Load the IDLs
     const offerIdl = require("../target/idl/offer.json");
-    const tradeIdl = require("../target/idl/trade.json");
 
     // Initialize clients
     offerClient = new OfferClient(OFFER_PROGRAM_ID, provider, offerIdl);
-    tradeClient = new TradeClient(TRADE_PROGRAM_ID, provider, tradeIdl);
 
     try {
       // Airdrop SOL to taker and mint authority
@@ -126,8 +121,6 @@ describe("offer", () => {
       maxAmount
     );
     
-    const [tradePDA] = await tradeClient.findTradeAddress(creator.publicKey, tokenMint);
-
     // Create escrow token account
     const escrowTokenAccount = Keypair.generate();
 
@@ -136,7 +129,6 @@ describe("offer", () => {
       creatorTokenAccount, 
       offerPDA, 
       escrowTokenAccount, 
-      tradePDA,
       pricePerToken,
       minAmount,
       maxAmount,
@@ -147,7 +139,6 @@ describe("offer", () => {
   it("Creates an offer", async () => {
     const { 
       creator, 
-      creatorTokenAccount, 
       offerPDA,
       pricePerToken,
       minAmount,
@@ -261,63 +252,6 @@ describe("offer", () => {
       expect(offer.status).to.equal('closed');
     } catch (error) {
       console.error("Error managing offer lifecycle:", error);
-      throw error;
-    }
-  });
-
-  it("Can take an offer", async () => {
-    const { 
-      creator, 
-      creatorTokenAccount, 
-      offerPDA, 
-      tradePDA,
-      pricePerToken,
-      minAmount,
-      maxAmount,
-      offerType
-    } = await setupCreator();
-
-    try {
-      // First create a new offer
-      await offerClient.createOffer(
-        creator,
-        tokenMint,
-        pricePerToken,
-        minAmount,
-        maxAmount,
-        offerType
-      );
-
-      // Create a trade account
-      const escrowAccount = Keypair.generate();
-      const tradeAmount = new anchor.BN(500_000); // 0.5 tokens
-      
-      await tradeClient.createTrade(
-        creator,
-        tokenMint,
-        creatorTokenAccount,
-        escrowAccount,
-        tradeAmount,
-        pricePerToken
-      );
-
-      // Take the offer
-      const takeAmount = new anchor.BN(500_000); // 0.5 tokens
-      await offerClient.takeOffer(
-        offerPDA,
-        creator.publicKey,
-        tokenMint,
-        tradePDA,
-        taker,
-        TRADE_PROGRAM_ID,
-        takeAmount
-      );
-
-      // Offer should still be active
-      const offer = await offerClient.getOffer(offerPDA);
-      expect(offer.status).to.equal('active');
-    } catch (error) {
-      console.error("Error taking offer:", error);
       throw error;
     }
   });
