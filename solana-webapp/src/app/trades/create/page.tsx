@@ -1,13 +1,13 @@
 'use client';
 
-import { FC, useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useRouter, useSearchParams, useParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { PublicKey, Connection } from '@solana/web3.js';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { getOffer } from '@/utils/offerService';
-import { createTrade, depositTradeEscrow } from '@/utils/tradeService';
+import { createTrade } from '@/utils/tradeService';
 import { useLocalWalletStore } from '@/utils/localWallets';
 import { ChangeEvent } from 'react';
 
@@ -26,7 +26,6 @@ interface OfferDetails {
 }
 
 const CreateTradePage = () => {
-  const params = useParams();
   const searchParams = useSearchParams();
   // Get offerId from query parameter instead of route parameter
   const offerId = searchParams.get('offerId');
@@ -38,13 +37,11 @@ const CreateTradePage = () => {
   const [offer, setOffer] = useState<OfferDetails | null>(null);
   const [amount, setAmount] = useState<string>('');
   const [amountError, setAmountError] = useState<string | null>(null);
-  const [totalPrice, setTotalPrice] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connection, setConnection] = useState<Connection | null>(null);
   const [createdTradeId, setCreatedTradeId] = useState<string | null>(null);
-  const [createdTokenMint, setCreatedTokenMint] = useState<string | null>(null);
 
   useEffect(() => {
     // Set up connection when component mounts
@@ -73,13 +70,10 @@ const CreateTradePage = () => {
   useEffect(() => {
     if (offer && amount) {
       try {
-        const amountValue = parseFloat(amount);
-        setTotalPrice(amountValue * offer.price);
-      } catch (e) {
-        setTotalPrice(0);
+        parseFloat(amount);
+      } catch {
+        // Ignore parse errors
       }
-    } else {
-      setTotalPrice(0);
     }
   }, [amount, offer]);
 
@@ -152,9 +146,9 @@ const CreateTradePage = () => {
       } else {
         setError('Offer not found');
       }
-    } catch (error: any) {
+    } catch (error: Error | unknown) {
       console.error('Error loading offer:', error);
-      setError(error.message || 'Failed to load offer details');
+      setError(error instanceof Error ? error.message : 'Failed to load offer details');
     } finally {
       setIsLoading(false);
     }
@@ -218,9 +212,10 @@ const CreateTradePage = () => {
     try {
       amountValue = parseFloat(amount);
       if (isNaN(amountValue)) {
-        throw new Error('Amount must be a valid number');
+        toast.error('Please enter a valid amount');
+        return;
       }
-    } catch (error) {
+    } catch {
       toast.error('Please enter a valid amount');
       return;
     }
@@ -256,83 +251,67 @@ const CreateTradePage = () => {
     try {
       setIsSubmitting(true);
       
-      // Create the trade (without depositing to escrow yet)
+      // Create the trade and deposit to escrow in one step
+      // Check if tokenMint exists, otherwise default to SOL token mint
+      const SOL_TOKEN_MINT = 'So11111111111111111111111111111111111111112';
+      
+      // More thorough validation of token mint
+      if (!offer.tokenMint) {
+        console.log('TokenMint is missing, using SOL token mint as fallback');
+      } else {
+        console.log('Original tokenMint value:', offer.tokenMint, 'Type:', typeof offer.tokenMint);
+      }
+      
+      const tokenMintString = offer.tokenMint || SOL_TOKEN_MINT;
+      
+      // Validate tokenMint before creating PublicKey
+      if (!tokenMintString || typeof tokenMintString !== 'string') {
+        console.error('Invalid token mint value:', tokenMintString);
+        throw new Error('Invalid token mint');
+      }
+      
+      // Try to clean up the string if it might be malformed
+      const cleanedTokenMint = tokenMintString.trim();
+      console.log('Using token mint:', cleanedTokenMint);
+      
+      let tokenMint: PublicKey;
+      try {
+        tokenMint = new PublicKey(cleanedTokenMint);
+      } catch (pkError) {
+        console.error('Failed to create PublicKey from token mint:', pkError);
+        // Fall back to SOL token mint
+        console.log('Falling back to SOL token mint');
+        tokenMint = new PublicKey(SOL_TOKEN_MINT);
+      }
+      
+      const price = offer.price * 100; // Convert to smallest units (e.g., cents)
+      const amountInMinorUnits = Math.floor(amountValue * 1000000); // Convert to smallest units (e.g., lamports)
+      
+      console.log('Creating trade with:');
+      console.log('- Token mint:', tokenMint.toString());
+      console.log('- Amount:', amountInMinorUnits);
+      console.log('- Price:', price);
+      
       const tradeId = await createTrade(
         connection,
         wallet,
-        new PublicKey(offer.id),
-        new PublicKey(offer.creator),
-        amountValue
+        tokenMint,
+        amountInMinorUnits,
+        price
       );
       
       if (tradeId) {
-        toast.success('Trade created successfully! Now deposit to escrow to activate it.');
+        toast.success('Trade created successfully!');
         setCreatedTradeId(tradeId);
-        setCreatedTokenMint(offer.tokenMint);
+        
+        // Redirect to the trades list page after a short delay
+        setTimeout(() => {
+          router.push('/trades');
+        }, 2000);
       }
-    } catch (error: any) {
+    } catch (error: Error | unknown) {
       console.error('Error creating trade:', error);
-      toast.error(error.message || 'Failed to create trade');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDepositEscrow = async () => {
-    if (!createdTradeId || !createdTokenMint) {
-      toast.error('No trade created yet');
-      return;
-    }
-
-    // Get the wallet to use
-    let wallet;
-    
-    if (isLocalnetMode) {
-      // Use the selected local wallet
-      const selectedWallet = getSelectedWallet();
-      if (!selectedWallet) {
-        toast.error('Please select a local wallet');
-        return;
-      }
-      wallet = {
-        publicKey: selectedWallet.keypair.publicKey,
-        keypair: selectedWallet.keypair
-      };
-    } else if (publicKey) {
-      wallet = {
-        publicKey
-      };
-    } else {
-      toast.error('Please connect your wallet');
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      
-      // Make sure we have a connection
-      if (!connection) {
-        toast.error('No connection available');
-        return;
-      }
-      
-      // Deposit to escrow
-      const success = await depositTradeEscrow(
-        connection,
-        wallet,
-        new PublicKey(createdTradeId),
-        new PublicKey(createdTokenMint),
-        parseFloat(amount) // Use the amount from the form
-      );
-      
-      if (success) {
-        toast.success('Successfully deposited to escrow! Trade is now active.');
-        // Redirect to the trade details page
-        router.push(`/trades/${createdTradeId}`);
-      }
-    } catch (error: any) {
-      console.error('Error depositing to escrow:', error);
-      toast.error(error.message || 'Failed to deposit to escrow');
+      toast.error(error instanceof Error ? error.message : 'Failed to create trade');
     } finally {
       setIsSubmitting(false);
     }
@@ -578,15 +557,6 @@ const CreateTradePage = () => {
                 >
                   Skip (View My Trades)
                 </Link>
-                
-                <button
-                  type="button"
-                  onClick={handleDepositEscrow}
-                  disabled={isSubmitting}
-                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? 'Depositing...' : 'Deposit to Escrow'}
-                </button>
               </div>
             </div>
           </div>

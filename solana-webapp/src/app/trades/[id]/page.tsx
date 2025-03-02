@@ -6,9 +6,10 @@ import { useRouter, useParams } from 'next/navigation';
 import { PublicKey, Connection } from '@solana/web3.js';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
-import { getTrade, acceptTrade, completeTrade, cancelTrade, disputeTrade, depositTradeEscrow } from '@/utils/tradeService';
+import { getTrade, acceptTrade, completeTrade, cancelTrade, disputeTrade } from '@/utils/tradeService';
 import { useLocalWalletStore } from '@/utils/localWallets';
 import { TradeStatus } from '@localmoney/solana-sdk';
+import { getAssociatedTokenAddress } from '@solana/spl-token';
 
 interface TradeDetails {
   id: string;
@@ -216,59 +217,59 @@ export default function TradeDetails() {
   const getStatusColor = (status: TradeStatus) => {
     switch (status) {
       case TradeStatus.Created:
-        return 'bg-purple-100 text-purple-800';
+        return 'bg-gray-100 text-gray-800';
       case TradeStatus.Open:
         return 'bg-blue-100 text-blue-800';
       case TradeStatus.InProgress:
         return 'bg-yellow-100 text-yellow-800';
       case TradeStatus.Completed:
         return 'bg-green-100 text-green-800';
-      case TradeStatus.Disputed:
-        return 'bg-red-100 text-red-800';
       case TradeStatus.Cancelled:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-red-100 text-red-800';
+      case TradeStatus.Disputed:
+        return 'bg-purple-100 text-purple-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getInstructions = () => {
-    if (!trade) return 'Loading trade details...';
-
+    if (!trade) return '';
+    
     if (isMaker) {
       switch (trade.status) {
         case TradeStatus.Created:
-          return 'Please deposit escrow to make this trade available to takers.';
+          return 'Your trade has been created but is not yet open for takers. The escrow deposit was made during trade creation.';
         case TradeStatus.Open:
-          return 'Your trade is open and waiting for a taker.';
+          return 'Your trade is now open and waiting for a taker. You can cancel it if you change your mind.';
         case TradeStatus.InProgress:
-          return 'This trade is in progress. Wait for the taker to confirm payment.';
+          return 'A taker has accepted your trade. Once payment is confirmed, you can complete the trade to release the escrow.';
         case TradeStatus.Completed:
           return 'This trade has been completed successfully.';
         case TradeStatus.Cancelled:
           return 'This trade has been cancelled.';
         case TradeStatus.Disputed:
           return 'This trade is under dispute. Please contact support.';
+        default:
+          return 'Unknown trade status.';
       }
-    }
-
-    if (isTaker) {
+    } else if (isTaker) {
       switch (trade.status) {
-        case TradeStatus.Created:
-          return 'Waiting for the maker to deposit escrow.';
         case TradeStatus.Open:
-          return 'Waiting for the maker to accept this trade.';
+          return 'You can accept this trade if you agree with the terms.';
         case TradeStatus.InProgress:
-          return 'Please send payment to the maker according to the agreed terms.';
+          return 'You have accepted this trade. Please complete the payment and wait for the maker to release the escrow.';
         case TradeStatus.Completed:
           return 'This trade has been completed successfully.';
         case TradeStatus.Cancelled:
-          return 'This trade has been cancelled.';
+          return 'This trade has been cancelled by the maker.';
         case TradeStatus.Disputed:
-          return 'This trade is currently under dispute. Please contact support.';
+          return 'This trade is under dispute. Please contact support.';
+        default:
+          return 'Unknown trade status.';
       }
     } else {
-      return 'You are not a participant in this trade.';
+      return 'This is a trade between other users.';
     }
   };
 
@@ -358,10 +359,29 @@ export default function TradeDetails() {
     try {
       setIsSubmitting(true);
       
+      // For demonstration purposes, we're using placeholder values for the parameters
+      // In a real implementation, these would be fetched from the blockchain
+      const priceOracle = new PublicKey('BGuwRibtPCCLCo98AFDk6C3QUPS2VHBkTRyDgkCrySfG'); // Price program ID as placeholder
+      const takerTokenAccount = await getAssociatedTokenAddress(
+        new PublicKey(trade.tokenMint || 'So11111111111111111111111111111111111111112'),
+        new PublicKey(trade.taker || wallet.publicKey.toString())
+      );
+      
+      // Placeholder values for profiles - in a real app, these would be fetched
+      const takerProfile = new PublicKey('8FJf3ymGwZ2ctUP85QRCsE2kMcuQY5Eu7X3dyXr7XakD'); // Profile program ID as placeholder
+      const makerProfile = new PublicKey('8FJf3ymGwZ2ctUP85QRCsE2kMcuQY5Eu7X3dyXr7XakD'); // Profile program ID as placeholder
+      
       const success = await completeTrade(
         connection,
         wallet,
-        new PublicKey(trade.id)
+        new PublicKey(trade.id),
+        new PublicKey(trade.maker),
+        new PublicKey(trade.taker || wallet.publicKey.toString()),
+        new PublicKey(trade.escrowAccount),
+        takerTokenAccount,
+        priceOracle,
+        takerProfile,
+        makerProfile
       );
       
       if (success) {
@@ -410,10 +430,18 @@ export default function TradeDetails() {
     try {
       setIsSubmitting(true);
       
+      // Get the maker token account
+      const makerTokenAccount = await getAssociatedTokenAddress(
+        new PublicKey(trade.tokenMint || 'So11111111111111111111111111111111111111112'),
+        new PublicKey(trade.maker)
+      );
+      
       const success = await cancelTrade(
         connection,
         wallet,
-        new PublicKey(trade.id)
+        new PublicKey(trade.id),
+        new PublicKey(trade.escrowAccount),
+        makerTokenAccount
       );
       
       if (success) {
@@ -492,101 +520,6 @@ export default function TradeDetails() {
     // In a real app, we would save this message to the backend
     toast.success('Message feature coming soon!');
     setUserMessage('');
-  };
-
-  const handleDepositEscrow = async () => {
-    if (!trade || !connection) {
-      console.error("Cannot deposit: Trade or connection is missing");
-      toast.error("Cannot deposit: Missing trade or connection");
-      return;
-    }
-    
-    try {
-      setIsSubmitting(true);
-      console.log("Starting deposit escrow flow...");
-      console.log("Trade details:", {
-        id: trade.id,
-        maker: trade.maker.substring(0, 8) + "...",
-        status: trade.status,
-        amount: trade.amount,
-        escrowAccount: trade.escrowAccount ? trade.escrowAccount.toString() : "undefined",
-        tokenMint: trade.tokenMint ? trade.tokenMint.toString() : "undefined"
-      });
-      
-      let wallet;
-      
-      if (isLocalnetMode) {
-        // Use the selected local wallet
-        const selectedWallet = getSelectedWallet();
-        if (selectedWallet && selectedWallet.keypair) {
-          console.log("Using local wallet for deposit:", 
-            selectedWallet.name || 'Unnamed Wallet', 
-            "Public Key:", selectedWallet.keypair.publicKey.toString());
-          
-          // Ensure the wallet structure is correct
-          wallet = {
-            publicKey: selectedWallet.keypair.publicKey,
-            keypair: selectedWallet.keypair
-          };
-          
-          // Verify the keypair structure for debugging
-          console.log("Wallet keypair for deposit:", 
-            typeof wallet.keypair, 
-            "Has secret key:", !!wallet.keypair.secretKey, 
-            "Secret key length:", wallet.keypair.secretKey ? wallet.keypair.secretKey.length : 0,
-            "Public key length:", wallet.keypair.publicKey.toBytes().length);
-        } else {
-          // More detailed error message
-          toast.error(selectedWallet ? 'Selected wallet missing keypair' : 'No local wallet selected');
-          console.error("Local wallet issue:", selectedWallet ? "Missing keypair" : "No wallet selected");
-          setIsSubmitting(false);
-          return;
-        }
-      } else if (connected && publicKey) {
-        console.log("Using connected wallet for deposit:", publicKey.toString());
-        wallet = {
-          publicKey
-        };
-      } else {
-        toast.error('No wallet connected');
-        console.error("No wallet connected for deposit");
-        setIsSubmitting(false);
-        return;
-      }
-      
-      // Create a PublicKey from the trade ID
-      const tradePDA = new PublicKey(trade.id);
-      
-      // Get the token mint from the trade if available, otherwise use SOL token mint
-      const tokenMint = trade.tokenMint || new PublicKey('So11111111111111111111111111111111111111112');
-      console.log("Using token mint:", tokenMint.toString());
-      
-      console.log("Starting escrow deposit process with trade:", trade.id);
-      console.log("Amount to deposit:", trade.amount, "SOL");
-      
-      // Deposit the amount specified in the trade
-      const success = await depositTradeEscrow(
-        connection,
-        wallet,
-        tradePDA,
-        tokenMint,
-        trade.amount
-      );
-      
-      if (success) {
-        console.log("Deposit successful, reloading trade details");
-        toast.success('Successfully deposited escrow!');
-        // Reload trade details
-        loadTradeDetails();
-      } else {
-        console.log("Deposit failed");
-      }
-    } catch (error: any) {
-      console.error('Error depositing escrow:', error);
-      toast.error(error.message || 'Failed to deposit escrow');
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   return (
@@ -710,15 +643,6 @@ export default function TradeDetails() {
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                   >
                     Cancel Trade
-                  </button>
-                )}
-                {trade.status === TradeStatus.Created && (
-                  <button
-                    onClick={handleDepositEscrow}
-                    disabled={isSubmitting}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    {isSubmitting ? 'Depositing...' : 'Deposit Escrow'}
                   </button>
                 )}
                 {trade.status === TradeStatus.InProgress && (

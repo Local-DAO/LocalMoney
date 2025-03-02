@@ -8,13 +8,17 @@ export class TradeClient {
   private connection: Connection;
   private testCounter = 0;
 
-  constructor(
-    programId: PublicKey,
-    provider: AnchorProvider,
-    idl: Idl
-  ) {
+  constructor(programId: PublicKey, provider: AnchorProvider, idl: Idl) {
+    if (!idl.instructions || !idl.instructions.some(i => i.name === "createTrade")) {
+      throw new Error("IDL is missing createTrade instruction");
+    }
     this.program = new Program(idl, programId, provider);
+    if (!this.program.methods || !this.program.methods.createTrade) {
+      console.error("Program methods not initialized. Available:", Object.keys(this.program.methods || {}));
+      throw new Error("Program methods not available");
+    }
     this.connection = provider.connection;
+    console.log("TradeClient initialized with methods:", Object.keys(this.program.methods));
   }
 
   async createTrade(
@@ -25,31 +29,42 @@ export class TradeClient {
     amount: BN,
     price: BN
   ): Promise<PublicKey> {
+    console.log("createTrade inputs:", {
+      maker: maker.publicKey.toString(),
+      tokenMint: tokenMint.toString(),
+      makerTokenAccount: makerTokenAccount.toString(),
+      escrowAccount: escrowAccount.publicKey.toString(),
+      amount: amount.toString(),
+      price: price.toString()
+    });
+
     const [tradePDA] = await PublicKey.findProgramAddress(
-      [
-        Buffer.from("trade"),
-        maker.publicKey.toBuffer(),
-        tokenMint.toBuffer(),
-      ],
+      [Buffer.from("trade"), maker.publicKey.toBuffer(), tokenMint.toBuffer()],
       this.program.programId
     );
+    console.log("Trade PDA:", tradePDA.toString());
 
-    await this.program.methods
-      .createTrade(amount, price)
-      .accounts({
-        trade: tradePDA,
-        maker: maker.publicKey,
-        tokenMint,
-        makerTokenAccount,
-        escrowAccount: escrowAccount.publicKey,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-        rent: SYSVAR_RENT_PUBKEY,
-      })
-      .signers([maker, escrowAccount])
-      .rpc();
-
-    return tradePDA;
+    try {
+      const signature = await this.program.methods
+        .createTrade(amount, price)
+        .accounts({
+          trade: tradePDA,
+          maker: maker.publicKey,
+          tokenMint,
+          makerTokenAccount,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: SYSVAR_RENT_PUBKEY,
+        })
+        .signers([maker, escrowAccount])
+        .rpc();
+      console.log("Transaction signature:", signature);
+      return tradePDA;
+    } catch (error) {
+      console.error("Error in createTrade:", error);
+      throw error;
+    }
   }
 
   async acceptTrade(
@@ -133,16 +148,16 @@ export class TradeClient {
   async getTrade(tradePDA: PublicKey): Promise<Trade> {
     const account = await this.program.account.trade.fetch(tradePDA);
     return {
-      maker: account.maker,
-      taker: account.taker,
-      amount: account.amount,
-      price: account.price,
-      tokenMint: account.tokenMint,
-      escrowAccount: account.escrowAccount,
+      maker: account.maker as PublicKey,
+      taker: account.taker as PublicKey | null,
+      amount: account.amount as BN,
+      price: account.price as BN,
+      tokenMint: account.tokenMint as PublicKey,
+      escrowAccount: account.escrowAccount as PublicKey,
       status: this.convertTradeStatus(account.status),
-      createdAt: account.createdAt.toNumber(),
-      updatedAt: account.updatedAt.toNumber(),
-      bump: account.bump,
+      createdAt: (account.createdAt as BN).toNumber(),
+      updatedAt: (account.updatedAt as BN).toNumber(),
+      bump: account.bump as number,
     };
   }
 
@@ -228,8 +243,8 @@ export class TradeClient {
           const accountInfo = await this.program.account.trade.fetch(account.pubkey);
           
           console.log(`Account data:`, {
-            maker: accountInfo.maker.toString(),
-            taker: accountInfo.taker ? accountInfo.taker.toString() : null,
+            maker: (accountInfo.maker as PublicKey).toString(),
+            taker: accountInfo.taker ? (accountInfo.taker as PublicKey).toString() : null,
           });
           
           // Check if this trade belongs to the user

@@ -1,19 +1,224 @@
 import { AnchorProvider, BN, Idl, Program } from '@project-serum/anchor';
-import { Connection, Keypair, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, Transaction, TransactionInstruction } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, getAccount, createSyncNativeInstruction } from '@solana/spl-token';
+import { Connection, Keypair, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, Transaction } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, getAccount, createAssociatedTokenAccountInstruction, createSyncNativeInstruction } from '@solana/spl-token';
 import { TradeStatus } from '@localmoney/solana-sdk';
 import toast from 'react-hot-toast';
+import { Wallet } from '@project-serum/anchor/dist/cjs/provider';
+
+// Define the Trade interface locally since it's not exported from the SDK
+interface Trade {
+  publicKey?: PublicKey;
+  maker: PublicKey;
+  taker: PublicKey | null;
+  amount: BN;
+  price: BN;
+  tokenMint: PublicKey;
+  escrowAccount: PublicKey;
+  status: TradeStatus;
+  createdAt: number;
+  updatedAt: number;
+  bump: number;
+}
+
+// Define a type for the possible wallet methods
+type WalletMethod = 'signTransaction' | 'sign' | 'signAndSendTransaction' | '_signTransaction' | 'sendTransaction';
+
+// Define a wallet interface that has at least a publicKey
+interface WalletWithPublicKey {
+  publicKey: PublicKey;
+  signTransaction?: (transaction: Transaction) => Promise<Transaction>;
+  signAllTransactions?: (transactions: Transaction[]) => Promise<Transaction[]>;
+  // Add keypair property that might exist on some wallet implementations
+  keypair?: Keypair;
+  // Use a more specific index signature for wallet methods
+  [methodName: string]: unknown;
+}
+
+// Create a wrapper that implements the Anchor Wallet interface for browser wallets
+class BrowserWalletAdapter implements Wallet {
+  constructor(private wallet: WalletWithPublicKey, private fallbackConnection: Connection) {
+    if (!wallet.publicKey) {
+      throw new Error("Wallet has no publicKey");
+    }
+  }
+
+  get publicKey(): PublicKey {
+    return this.wallet.publicKey;
+  }
+
+  // Attempt to sign a transaction even if no standard sign method exists
+  private async tryUnsafeSignTransaction(tx: Transaction): Promise<Transaction> {
+    console.log("Attempting unsafe transaction signing...");
+    console.log("Wallet public key:", this.wallet.publicKey.toString());
+    
+    // Check if wallet has a keypair property (direct access to the keypair)
+    if ('keypair' in this.wallet && this.wallet.keypair) {
+      console.log("Found keypair property in wallet, using it directly for signing");
+      try {
+        // Add recent blockhash if not present
+        if (!tx.recentBlockhash) {
+          console.log("Adding recent blockhash to transaction");
+          const { blockhash } = await this.fallbackConnection.getLatestBlockhash();
+          tx.recentBlockhash = blockhash;
+        }
+        
+        // Make sure the transaction has the correct feePayer
+        if (!tx.feePayer) {
+          console.log("Setting fee payer to wallet public key");
+          tx.feePayer = this.wallet.publicKey;
+        }
+        
+        // Sign the transaction with the keypair
+        console.log("Signing transaction with wallet keypair");
+        tx.partialSign(this.wallet.keypair);
+        
+        // Check if the signature was added
+        const signatures = tx.signatures.filter(sig => sig.signature !== null);
+        console.log("Transaction now has", signatures.length, "signatures");
+        
+        if (signatures.length > 0) {
+          console.log("Successfully signed transaction with keypair");
+          return tx;
+        } else {
+          console.log("Failed to add signature using keypair");
+        }
+      } catch (e) {
+        console.error("Error signing with keypair:", e);
+      }
+    }
+    
+    // Check if this wallet is a LocalWalletAdapter from our custom implementation
+    const isLocalWalletAdapter = Object.getPrototypeOf(this.wallet).constructor.name === 'LocalWalletAdapter';
+    if (isLocalWalletAdapter) {
+      console.log("Detected LocalWalletAdapter, attempting to use its native method");
+      try {
+        // Define a more specific type for the LocalWalletAdapter's signTransaction method
+        interface LocalWalletWithSignMethod extends WalletWithPublicKey {
+          signTransaction: (tx: Transaction) => Promise<Transaction>;
+        }
+        
+        // For LocalWalletAdapter, we know the implementation has a signTransaction method
+        // that directly uses keypair.sign() which should work
+        return await (this.wallet as LocalWalletWithSignMethod).signTransaction(tx);
+      } catch (e) {
+        console.error("Failed to use LocalWalletAdapter's signTransaction:", e);
+      }
+    }
+    
+    // Try all possible sign methods that might exist on wallet adapters
+    const possibleSignMethods: WalletMethod[] = [
+      'signTransaction',
+      'sign',
+      'signAndSendTransaction',
+      '_signTransaction',
+      'sendTransaction'
+    ];
+    
+    // First ensure the transaction has the necessary fields
+    // Add recent blockhash if not present
+    if (!tx.recentBlockhash) {
+      console.log("Adding recent blockhash to transaction");
+      const { blockhash } = await this.fallbackConnection.getLatestBlockhash();
+      tx.recentBlockhash = blockhash;
+    }
+    
+    // Make sure the transaction has the correct feePayer
+    if (!tx.feePayer) {
+      console.log("Setting fee payer to wallet public key");
+      tx.feePayer = this.wallet.publicKey;
+    }
+
+    // Check if the transaction already has signatures
+    const existingSignatures = tx.signatures.filter(sig => sig.signature !== null);
+    console.log("Transaction already has", existingSignatures.length, "signatures");
+    
+    for (const method of possibleSignMethods) {
+      if (typeof this.wallet[method] === 'function') {
+        try {
+          console.log(`Trying wallet method: ${method}`);
+          
+          const result = await this.wallet[method](tx);
+          console.log(`Result from ${method}:`, result ? "success" : "null/undefined");
+          
+          if (result instanceof Transaction) {
+            // Check if the transaction now has signatures
+            const newSignatures = result.signatures.filter(sig => sig.signature !== null);
+            console.log("Transaction now has", newSignatures.length, "signatures");
+            
+            if (newSignatures.length > existingSignatures.length) {
+              console.log(`Successfully signed transaction with ${method}`);
+              return result;
+            } else {
+              console.log(`Method ${method} didn't add signatures`);
+            }
+          } else {
+            console.log(`Method ${method} didn't return a Transaction:`, result);
+          }
+        } catch (e) {
+          console.error(`Failed with method ${method}:`, e);
+        }
+      }
+    }
+    
+    // If all else fails, return the original transaction
+    console.warn("All signing methods failed, returning unsigned transaction");
+    return tx;
+  }
+
+  async signTransaction(tx: Transaction): Promise<Transaction> {
+    // Log detailed information about the wallet object for debugging
+    console.log("Wallet object type:", Object.prototype.toString.call(this.wallet));
+    console.log("Available wallet methods:", Object.getOwnPropertyNames(Object.getPrototypeOf(this.wallet))
+      .filter(prop => typeof this.wallet[prop] === 'function')
+      .join(', '));
+    
+    // Check for the signTransaction method more carefully
+    const hasSignTransactionMethod = 
+      this.wallet.signTransaction !== undefined && 
+      typeof this.wallet.signTransaction === 'function';
+    
+    if (!hasSignTransactionMethod) {
+      console.warn("Standard signTransaction method not found, trying unsafe methods");
+      return this.tryUnsafeSignTransaction(tx);
+    }
+    
+    try {
+      console.log("Using standard signTransaction method");
+      // Since we've checked that signTransaction exists and is a function, we can safely call it
+      return await (this.wallet.signTransaction as (tx: Transaction) => Promise<Transaction>)(tx);
+    } catch (error) {
+      console.error("Error using standard signTransaction method:", error);
+      return this.tryUnsafeSignTransaction(tx);
+    }
+  }
+
+  async signAllTransactions(txs: Transaction[]): Promise<Transaction[]> {
+    if (!this.wallet.signAllTransactions) {
+      // Try to sign each transaction individually
+      console.warn("signAllTransactions not available, signing each transaction individually");
+      return Promise.all(txs.map(tx => this.signTransaction(tx)));
+    }
+    
+    try {
+      return await this.wallet.signAllTransactions(txs);
+    } catch (error) {
+      console.error("Error using standard signAllTransactions method:", error);
+      return Promise.all(txs.map(tx => this.signTransaction(tx)));
+    }
+  }
+}
 
 // Program IDs from environment variables
-const OFFER_PROGRAM_ID = process.env.NEXT_PUBLIC_OFFER_PROGRAM_ID || 'FSnCsffRYjRwbpzFCkbwSFtgfSNbxrpYUsq84opqG4wW';
-const TRADE_PROGRAM_ID = process.env.NEXT_PUBLIC_TRADE_PROGRAM_ID || '6VXLHER2xPndomqaXWPPUH3733HVmcRMUuU5w9eNVqbZ';
+const TRADE_PROGRAM_ID = process.env.NEXT_PUBLIC_TRADE_PROGRAM_ID || '2ebQZghoJAExZ64eUuw5xq7GVycibtsyA2yPKgfNSYNj';
+const PRICE_PROGRAM_ID = process.env.NEXT_PUBLIC_PRICE_PROGRAM_ID || 'BGuwRibtPCCLCo98AFDk6C3QUPS2VHBkTRyDgkCrySfG';
+const PROFILE_PROGRAM_ID = process.env.NEXT_PUBLIC_PROFILE_PROGRAM_ID || '8FJf3ymGwZ2ctUP85QRCsE2kMcuQY5Eu7X3dyXr7XakD';
 const SOL_TOKEN_MINT = 'So11111111111111111111111111111111111111112';
 
 // Helper function to check token balance and airdrop SOL if needed
 const LAMPORTS_PER_SOL = 1000000000;
 const ensureSufficientTokens = async (
   connection: Connection,
-  wallet: any,
+  wallet: WalletWithPublicKey,
   tokenMint: PublicKey,
   requiredAmount: BN
 ): Promise<boolean> => {
@@ -36,7 +241,7 @@ const ensureSufficientTokens = async (
         
         if (isLocalnet) {
           console.log(`Airdropping 111 SOL to ${wallet.publicKey.toString()}`);
-          const airdropSignature = await connection.requestAirdrop(wallet.publicKey, 111 * 1e9);
+          const airdropSignature = await connection.requestAirdrop(wallet.publicKey, 111 * LAMPORTS_PER_SOL);
           await connection.confirmTransaction(airdropSignature, 'confirmed');
           console.log('Airdrop successful');
           toast.success('Airdropped 111 SOL to your wallet');
@@ -60,7 +265,7 @@ const ensureSufficientTokens = async (
           return false;
         }
         return true;
-      } catch (error) {
+      } catch {
         // If the token account doesn't exist, there are definitely not enough tokens
         toast.error(`Token account not found. Please make sure you have the required tokens.`);
         return false;
@@ -76,340 +281,387 @@ const ensureSufficientTokens = async (
 // Trade client factory
 export const createTradeClient = async (
   connection: Connection,
-  wallet: any
-): Promise<any> => {
-  try {
-    // Ensure connection is available
-    if (!connection) {
-      console.error('Connection is not available when creating trade client');
-      toast.error('Solana connection is not available. Please check your network settings.');
-      throw new Error('Connection is not available');
-    }
-    
-    // Ensure wallet has publicKey
-    if (!wallet || !wallet.publicKey) {
-      console.error('Wallet not properly configured when creating trade client');
-      toast.error('Wallet not properly configured. Please connect your wallet or select a local wallet.');
-      throw new Error('Wallet not properly configured');
-    }
-    
-    // Make sure the wallet has the required sign methods for Anchor
-    let anchorWallet = wallet;
-    
-    if (wallet.keypair) {
-      console.log('Creating Anchor wallet from local wallet with keypair');
-      // For local wallets with keypair, create a proper AnchorWallet
-      anchorWallet = {
-        publicKey: wallet.publicKey,
-        signTransaction: async (tx: any) => {
-          tx.partialSign(wallet.keypair);
-          return tx;
-        },
-        signAllTransactions: async (txs: any[]) => {
-          return txs.map(tx => {
-            tx.partialSign(wallet.keypair);
-            return tx;
-          });
-        }
-      };
-    } else {
-      console.log('Using wallet adapter as is (should have signTransaction methods)');
-      // For browser wallets via wallet adapter, we assume signTransaction is already defined
-      if (!wallet.signTransaction) {
-        console.warn('Warning: Wallet missing signTransaction method');
-      }
-    }
-    
-    // Create an Anchor provider with proper options
-    const provider = new AnchorProvider(
-      connection,
-      anchorWallet,
-      { 
-        commitment: 'confirmed',
-        preflightCommitment: 'confirmed',
-        skipPreflight: false
-      }
-    );
-    
-    // Load the IDL
-    // In a production app, we would import this from the SDK
-    let idl;
-    
-    try {
-      // First try to fetch from the blockchain
-      idl = await Program.fetchIdl(new PublicKey(TRADE_PROGRAM_ID), provider);
-    } catch (error) {
-      console.warn('Failed to fetch IDL from the blockchain, trying local file:', error);
-    }
-    
-    // If fetching from the blockchain failed, try to load from the local file
-    if (!idl) {
-      try {
-        // Try to load from the local file in public/idl directory
-        const response = await fetch('/idl/trade.json');
-        if (response.ok) {
-          idl = await response.json();
-          console.log('Loaded Trade IDL from local file');
-        } else {
-          console.error('Failed to load local Trade IDL file');
-          toast.error('Failed to load Trade program IDL');
-          throw new Error('Failed to load Trade program IDL');
-        }
-      } catch (fetchError) {
-        console.error('Error loading local Trade IDL:', fetchError);
-        toast.error('Failed to load Trade program IDL');
-        throw new Error('Failed to load Trade program IDL');
-      }
-    }
-    
-    if (!idl) {
-      console.error('Failed to fetch the Trade program IDL');
-      toast.error('Failed to fetch the Trade program IDL');
-      throw new Error('Failed to fetch the Trade program IDL');
-    }
-    
-    // Create the client
-    return new TradeClient(new PublicKey(TRADE_PROGRAM_ID), provider, idl);
-  } catch (error: any) {
-    console.error('Error creating Trade client:', error);
-    toast.error(error.message || 'Failed to create Trade client');
-    throw error;
+  wallet: WalletWithPublicKey
+): Promise<TradeClient> => {
+  // Validate wallet has necessary methods
+  if (!wallet) {
+    throw new Error("Wallet is undefined");
   }
+  
+  if (!wallet.publicKey) {
+    throw new Error("Wallet has no publicKey");
+  }
+  
+  // Log wallet capabilities for debugging
+  console.log("Wallet capabilities:", {
+    hasPublicKey: !!wallet.publicKey,
+    hasSignTransaction: typeof wallet.signTransaction === 'function',
+    hasSignAllTransactions: typeof wallet.signAllTransactions === 'function',
+    walletType: wallet.constructor?.name || 'unknown'
+  });
+  
+  // Create browser-specific wallet adapter with connection for blockhash lookup
+  const walletAdapter = new BrowserWalletAdapter(wallet, connection);
+  
+  // Create provider with the wallet adapter
+  const provider = new AnchorProvider(
+    connection, 
+    walletAdapter, 
+    { 
+      commitment: 'confirmed', 
+      preflightCommitment: 'confirmed',
+      skipPreflight: false
+    }
+  );
+  
+  // Log provider details
+  console.log("Created AnchorProvider:", {
+    hasWallet: !!provider.wallet,
+    walletPublicKey: provider.wallet.publicKey.toString()
+  });
+  
+  const programId = new PublicKey(TRADE_PROGRAM_ID);
+  
+  // Fetch the IDL
+  let idl;
+  try {
+    idl = await Program.fetchIdl(programId, provider);
+    if (!idl) {
+      console.log("IDL not found on chain, fetching from local file...");
+      idl = await (await fetch('/idl/trade.json')).json();
+    }
+  } catch (error) {
+    console.error("Error fetching IDL:", error);
+    console.log("Falling back to local IDL file...");
+    idl = await (await fetch('/idl/trade.json')).json();
+  }
+  
+  if (!idl) {
+    throw new Error("Failed to load IDL from chain or local file");
+  }
+  
+  console.log("IDL loaded successfully:", {
+    name: idl.name,
+    instructions: idl.instructions?.length || 0
+  });
+  
+  return new TradeClient(programId, provider, idl);
 };
 
-// Mock TradeClient (would be replaced by actual SDK class)
+// Type to represent the status variants from Anchor
+type TradeStatusVariant = {
+  created?: Record<string, never>;
+  open?: Record<string, never>;
+  inProgress?: Record<string, never>;
+  completed?: Record<string, never>;
+  cancelled?: Record<string, never>;
+  disputed?: Record<string, never>;
+};
+
+// Real TradeClient implementation based on SDK
 class TradeClient {
   private program: Program;
   private connection: Connection;
+  private wallet: Wallet;
+  private provider: AnchorProvider;
 
-  constructor(
-    programId: PublicKey,
-    provider: AnchorProvider,
-    idl: Idl
-  ) {
-    this.program = new Program(idl, programId, provider);
+  constructor(programId: PublicKey, provider: AnchorProvider, idl: Idl) {
+    if (!idl.instructions || !idl.instructions.some(i => i.name === "createTrade")) {
+      throw new Error("IDL is missing createTrade instruction");
+    }
+
+    this.provider = provider;
     this.connection = provider.connection;
-    console.log("TradeClient initialized with connection:", 
-      this.connection ? "Connection available" : "No connection",
-      "Provider connection:", provider.connection ? "Available" : "Not available");
+    this.wallet = provider.wallet;
+    
+    // Use provider directly when creating the program
+    this.program = new Program(idl, programId, this.provider);
+    
+    if (!this.program.methods?.createTrade) {
+      throw new Error("Program initialized but createTrade method is missing");
+    }
+    
+    console.log("TradeClient initialized with provider wallet:", this.wallet.publicKey.toString());
   }
 
   async createTrade(
-    maker: any,
-    offerPDA: PublicKey,
-    offerOwner: PublicKey,
+    wallet: WalletWithPublicKey,
     tokenMint: PublicKey,
+    makerTokenAccount: PublicKey,
+    escrowAccount: Keypair,
     amount: BN,
     price: BN
   ): Promise<PublicKey> {
+    if (!this.program.methods?.createTrade) {
+      throw new Error("createTrade method is not available");
+    }
+
+    if (!wallet.publicKey) {
+      throw new Error("Wallet public key is not available");
+    }
+    
+    console.log("Creating trade with wallet:", wallet.publicKey.toString());
+    console.log("Provider wallet:", this.wallet.publicKey.toString());
+    
+    // Check properties of the wallet object to diagnose issues
+    console.log("Wallet object properties:", Object.getOwnPropertyNames(wallet));
+    console.log("Wallet has signTransaction:", wallet.signTransaction !== undefined);
+    console.log("Wallet has keypair:", wallet.keypair !== undefined);
+    
+    if (wallet.signTransaction) {
+      console.log("signTransaction type:", typeof wallet.signTransaction);
+    } else {
+      console.log("Wallet does not have signTransaction method");
+    }
+    
+    // Check if we can access the wallet prototype
     try {
-      // Check token account balance
-      const makerTokenAccount = await getAssociatedTokenAddress(
-        tokenMint,
-        maker.publicKey
-      );
+      const protoProps = Object.getOwnPropertyNames(Object.getPrototypeOf(wallet));
+      console.log("Wallet prototype properties:", protoProps);
+    } catch (e) {
+      console.log("Could not access wallet prototype:", e);
+    }
 
-      // Create escrow keypair
-      const escrowAccount = Keypair.generate();
-      
-      // Check if the token account exists, if not create it
-      let accountExists = false;
-      try {
-        const accountInfo = await getAccount(this.connection, makerTokenAccount);
-        accountExists = true;
-        
-        // Check if there are enough tokens
-        const balance = BigInt(accountInfo.amount.toString());
-        if (balance < BigInt(amount.toString())) {
-          const isSolToken = tokenMint.toString() === SOL_TOKEN_MINT;
-          if (isSolToken) {
-            // If this is SOL and we're on localnet, we might need to airdrop
-            if (this.connection.rpcEndpoint.includes('localhost') || this.connection.rpcEndpoint.includes('127.0.0.1')) {
-              console.log(`Not enough SOL. Current: ${balance.toString()}, Required: ${amount.toString()}`);
-              console.log(`Airdropping 111 SOL to ${maker.publicKey.toString()}`);
-              const airdropSignature = await this.connection.requestAirdrop(maker.publicKey, 111 * 1e9);
-              await this.connection.confirmTransaction(airdropSignature, 'confirmed');
-              console.log('Airdrop successful');
-            } else {
-              throw new Error(`Insufficient SOL balance. Current: ${Number(balance) / 1e9} SOL, Required: ${amount.toNumber() / 1e9} SOL`);
-            }
-          } else {
-            throw new Error(`Insufficient token balance. Current: ${balance.toString()}, Required: ${amount.toString()}`);
-          }
-        }
-      } catch (error) {
-        if (error instanceof Error && error.message.includes("Insufficient")) {
-          throw error; // Rethrow balance errors
-        }
-        console.log('Token account does not exist, will create it');
-        accountExists = false;
-      }
+    // Check if the wallet is the same as the provider wallet
+    const isProviderWallet = wallet.publicKey.equals(this.wallet.publicKey);
+    if (!isProviderWallet) {
+      console.warn("Warning: The wallet public key doesn't match the provider wallet public key");
+      console.warn("This may cause signature verification failures if the instruction requires the maker to sign");
+    }
 
-      // Create the trade PDA - using proper maker/taker terminology
-      const [tradePDA] = await PublicKey.findProgramAddress(
-        [
-          Buffer.from("trade"),
-          maker.publicKey.toBuffer(), // This is the maker in the current context
-          tokenMint.toBuffer(),
-        ],
-        this.program.programId
-      );
-      
-      // Determine what type of wallet we're dealing with and create proper signers
-      let signers = [escrowAccount]; // Always need the escrow account
-      
-      // For local wallets with keypair, use the keypair directly
-      if (maker.keypair) {
-        signers.push(maker.keypair);
-      } 
-      // For wallet adapter that has signTransaction
-      else if (maker.signTransaction) {
-        signers.push(maker);
-      }
-      // For other wallet types, we'll need to specify signers differently
-      else {
-        console.log('Using special wallet signing configuration');
-      }
+    const [tradePDA] = await PublicKey.findProgramAddress(
+      [Buffer.from("trade"), wallet.publicKey.toBuffer(), tokenMint.toBuffer()],
+      this.program.programId
+    );
+    
+    console.log("Generated trade PDA:", tradePDA.toString());
+    console.log("Starting transaction...");
 
-      // If the token account doesn't exist, we need to create it first
-      if (!accountExists) {
-        // Create a transaction to create the token account
-        const createTokenAccountIx = createAssociatedTokenAccountInstruction(
-          maker.publicKey,
-          makerTokenAccount,
-          maker.publicKey,
-          tokenMint
-        );
-        
-        // Send the transaction
-        const transaction = new Transaction().add(createTokenAccountIx);
-        const { blockhash } = await this.connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = maker.publicKey;
-        
-        if (maker.keypair) {
-          // For local wallets with keypair
-          transaction.sign(maker.keypair);
-          const signature = await this.connection.sendRawTransaction(transaction.serialize());
-          
-          // Wait for confirmation with signature
-          console.log('Waiting for token account creation to be confirmed...');
-          await this.connection.confirmTransaction({
-            signature,
-            blockhash,
-            lastValidBlockHeight: (await this.connection.getBlockHeight()) + 150
-          }, 'confirmed');
-        } else if (maker.signTransaction) {
-          // For wallet adapter
-          const signedTx = await maker.signTransaction(transaction);
-          const signature = await this.connection.sendRawTransaction(signedTx.serialize());
-          
-          // Wait for confirmation with signature
-          console.log('Waiting for token account creation to be confirmed...');
-          await this.connection.confirmTransaction({
-            signature,
-            blockhash,
-            lastValidBlockHeight: (await this.connection.getBlockHeight()) + 150
-          }, 'confirmed');
-        } else {
-          throw new Error('Wallet does not support signing');
-        }
-      }
-      
-      // Create the transaction - update account names to match new IDL
-      await this.program.methods
+    try {
+      // Create the method call but don't execute it yet
+      const method = this.program.methods
         .createTrade(amount, price)
         .accounts({
           trade: tradePDA,
-          maker: maker.publicKey,
-          tokenMint: tokenMint,
-          makerTokenAccount: makerTokenAccount, // Updated from sellerTokenAccount to makerTokenAccount
+          maker: wallet.publicKey,
+          tokenMint,
+          makerTokenAccount,
           escrowAccount: escrowAccount.publicKey,
           tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
           rent: SYSVAR_RENT_PUBKEY,
         })
-        .signers(signers)
-        .rpc();
+        .signers([escrowAccount]);
       
+      // Special case for wallets with keypair but no signTransaction method
+      if ('keypair' in wallet && wallet.keypair && !wallet.signTransaction) {
+        console.log("Using wallet with keypair directly for transaction");
+        
+        // Get the transaction object
+        const transaction = await method.transaction();
+        
+        // Set recent blockhash
+        const { blockhash } = await this.connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = wallet.publicKey;
+        
+        // Sign with keypair directly
+        console.log("Signing transaction with direct keypair access");
+        transaction.partialSign(escrowAccount, wallet.keypair);
+        
+        // Send and confirm
+        const serializedTx = transaction.serialize();
+        console.log("Transaction serialized successfully with", transaction.signatures.length, "signatures");
+        
+        const txId = await this.connection.sendRawTransaction(serializedTx);
+        await this.connection.confirmTransaction(txId, 'confirmed');
+        console.log("Transaction confirmed with ID:", txId);
+        
+        console.log("Transaction completed successfully");
+        return tradePDA;
+      }
+      // If we're not using the provider's wallet, we need a custom approach
+      else if (!isProviderWallet) {
+        console.log("Using custom transaction signing approach since wallet doesn't match provider");
+        
+        // Get the transaction object
+        const transaction = await method.transaction();
+        
+        // Set recent blockhash
+        const { blockhash } = await this.connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = wallet.publicKey;
+        
+        // Add escrow account signature
+        transaction.partialSign(escrowAccount);
+        console.log("Transaction partially signed with escrow account");
+        
+        // Wrap in try-catch to provide better error diagnostics
+        try {
+          if (!wallet.signTransaction) {
+            console.error("Wallet does not have signTransaction method!");
+            
+            // Try to use the provider's wallet as a fallback
+            console.log("Attempting to use provider's wallet as a fallback...");
+            const signedTx = await this.wallet.signTransaction(transaction);
+            console.log("Successfully signed with provider wallet");
+            
+            // Send and confirm
+            const txId = await this.connection.sendRawTransaction(signedTx.serialize());
+            await this.connection.confirmTransaction(txId, 'confirmed');
+            console.log("Transaction confirmed with ID:", txId);
+          } else {
+            // Sign with the provided wallet
+            console.log("About to sign transaction with provided wallet");
+            const signedTx = await wallet.signTransaction(transaction);
+            console.log("Transaction signed by wallet");
+            
+            // Check that we have the required signatures
+            const sigCount = signedTx.signatures.filter(sig => sig.signature !== null).length;
+            console.log(`Transaction has ${sigCount} signatures`);
+            
+            // Send and confirm
+            const txId = await this.connection.sendRawTransaction(signedTx.serialize());
+            await this.connection.confirmTransaction(txId, 'confirmed');
+            console.log("Transaction confirmed with ID:", txId);
+          }
+        } catch (signError) {
+          console.error("Error during transaction signing:", signError);
+          
+          // As a last resort, try a direct approach
+          console.log("Trying direct transaction approach...");
+          const txId = await this.sendRawTransaction(transaction, [escrowAccount]);
+          console.log("Transaction sent with ID:", txId);
+          await this.connection.confirmTransaction(txId, 'confirmed');
+        }
+      } else {
+        // Use the Anchor Program's normal flow which uses the provider's wallet
+        console.log("Using Anchor program's standard approach with provider wallet");
+        await method.rpc();
+        console.log("Anchor transaction completed");
+      }
+      
+      console.log("Transaction completed successfully");
       return tradePDA;
-    } catch (error: any) {
-      console.error('Error creating trade:', error);
+    } catch (error) {
+      console.error("Error in createTrade transaction:", error);
       throw error;
+    }
+  }
+
+  // Helper method to send a transaction with multiple signers
+  private async sendRawTransaction(transaction: Transaction, signers: Keypair[]): Promise<string> {
+    // Add the signers
+    transaction.partialSign(...signers);
+    
+    if (this.wallet.signTransaction) {
+      const signed = await this.wallet.signTransaction(transaction);
+      console.log("Transaction signed by wallet adapter");
+      return await this.connection.sendRawTransaction(signed.serialize());
+    } else {
+      console.warn("Wallet adapter lacks signTransaction, but continuing with partial signatures only");
+      return await this.connection.sendRawTransaction(transaction.serialize());
     }
   }
 
   async acceptTrade(
     tradePDA: PublicKey,
-    taker: any
+    taker: WalletWithPublicKey
   ): Promise<void> {
+    if (!taker.publicKey) {
+      throw new Error("Taker public key is not available");
+    }
+    
     await this.program.methods
       .acceptTrade()
       .accounts({
         trade: tradePDA,
-        taker: taker.publicKey, // Updated from user to taker
+        taker: taker.publicKey,
       })
-      .signers([taker])
+      .signers([])
       .rpc();
   }
 
   async completeTrade(
     tradePDA: PublicKey,
-    user: any
+    maker: WalletWithPublicKey,
+    taker: WalletWithPublicKey,
+    escrowAccount: PublicKey,
+    takerTokenAccount: PublicKey,
+    priceOracle: PublicKey,
+    takerProfile: PublicKey,
+    makerProfile: PublicKey
   ): Promise<void> {
-    const trade = await this.getTrade(tradePDA);
+    if (!maker.publicKey || !taker.publicKey) {
+      throw new Error("Maker or taker public key is not available");
+    }
     
     await this.program.methods
       .completeTrade()
       .accounts({
         trade: tradePDA,
-        maker: trade.maker, // Updated from seller to maker
-        taker: trade.taker, // Updated from buyer to taker
-        escrowAccount: trade.escrowAccount,
-        user: user.publicKey,
+        maker: maker.publicKey,
+        taker: taker.publicKey,
+        escrowAccount,
+        takerTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
+        priceOracle,
+        priceProgram: new PublicKey(PRICE_PROGRAM_ID),
+        takerProfile,
+        makerProfile,
+        profileProgram: new PublicKey(PROFILE_PROGRAM_ID),
       })
-      .signers([user])
+      .signers([])
       .rpc();
   }
 
   async cancelTrade(
     tradePDA: PublicKey,
-    user: any
+    maker: WalletWithPublicKey,
+    escrowAccount: PublicKey,
+    makerTokenAccount: PublicKey
   ): Promise<void> {
-    const trade = await this.getTrade(tradePDA);
+    if (!maker.publicKey) {
+      throw new Error("Maker public key is not available");
+    }
     
     await this.program.methods
       .cancelTrade()
       .accounts({
         trade: tradePDA,
-        maker: user.publicKey, // Updated from seller to maker
-        escrowAccount: trade.escrowAccount,
+        maker: maker.publicKey,
+        escrowAccount,
+        makerTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
-      .signers([user])
+      .signers([])
       .rpc();
   }
 
   async disputeTrade(
     tradePDA: PublicKey,
-    disputer: any
+    disputer: WalletWithPublicKey
   ): Promise<void> {
+    if (!disputer.publicKey) {
+      throw new Error("Disputer public key is not available");
+    }
+    
     await this.program.methods
       .disputeTrade()
       .accounts({
         trade: tradePDA,
         disputer: disputer.publicKey,
       })
-      .signers([disputer])
+      .signers([])
       .rpc();
   }
 
-  async getTrade(tradePDA: PublicKey): Promise<any> {
+  async getTrade(tradePDA: PublicKey): Promise<Trade> {
     const account = await this.program.account.trade.fetch(tradePDA);
     return {
-      maker: account.maker,  // Updated from seller to maker
-      taker: account.taker,  // Updated from buyer to taker
+      publicKey: tradePDA,
+      maker: account.maker,
+      taker: account.taker,
       amount: account.amount,
       price: account.price,
       tokenMint: account.tokenMint,
@@ -420,106 +672,187 @@ class TradeClient {
       bump: account.bump,
     };
   }
-  
-  async getTradesByUser(userPublicKey: PublicKey): Promise<any[]> {
-    // This would fetch all trades and filter by maker or taker
-    let allTrades = [];
-    console.log("Fetching trades for user:", userPublicKey.toString());
-    
-    try {
-      // Add extra error handling for account fetching and decoding
-      try {
-        allTrades = await this.program.account.trade.all();
-        console.log("Total trades found:", allTrades.length);
-      } catch (decodeError) {
-        console.error('Error decoding trade accounts:', decodeError);
-        
-        // Fallback to fetch accounts without decoding
-        const rawAccounts = await this.connection.getProgramAccounts(this.program.programId);
-        console.log("Raw accounts fetched:", rawAccounts.length);
-        
-        // Try to decode each account individually
-        allTrades = rawAccounts
-          .map(account => {
-            try {
-              // Manual decoding with error handling
-              const decodedAccount = this.program.coder.accounts.decode('Trade', account.account.data);
-              return {
-                publicKey: account.pubkey,
-                account: decodedAccount
-              };
-            } catch (error) {
-              console.warn(`Failed to decode account ${account.pubkey.toString()}`, error);
-              return null;
-            }
-          })
-          .filter(account => account !== null);
-        
-        console.log("Successfully decoded accounts:", allTrades.length);
-      }
-    } catch (error) {
-      console.error('Error fetching all trades:', error);
-      return []; // Return empty array if fetching fails completely
-    }
-    
-    // Filter and map trades with additional error handling
-    const filteredTrades = allTrades
-      .filter(account => {
-        try {
-          if (!account || !account.account) {
-            console.warn('Skipping null account');
-            return false;
-          }
-          
-          const trade = account.account;
-          // Check if trade object has the required properties
-          if (!trade.maker) {
-            console.warn('Skipping trade without maker');
-            return false;
-          }
-          
-          // Use maker/taker terminology consistently
-          const isMaker = trade.maker && trade.maker.equals(userPublicKey);
-          const isTaker = trade.taker && trade.taker.equals(userPublicKey);
-          console.log("Trade:", account.publicKey.toString(), 
-            "Maker:", trade.maker?.toString(), 
-            "Taker:", trade.taker?.toString(), 
-            "User is maker:", isMaker, 
-            "User is taker:", isTaker);
-          return isMaker || isTaker;
-        } catch (error) {
-          console.warn('Skipping invalid trade account:', error);
-          return false; // Skip this account if we can't process it
-        }
-      })
-      .map(account => {
-        try {
-          const trade = account.account;
-          return {
-            publicKey: account.publicKey,
-            maker: trade.maker,
-            taker: trade.taker,
-            amount: trade.amount,
-            price: trade.price,
-            tokenMint: trade.tokenMint,
-            escrowAccount: trade.escrowAccount,
-            status: this.convertTradeStatus(trade.status),
-            createdAt: trade.createdAt.toNumber(),
-            updatedAt: trade.updatedAt.toNumber(),
-            bump: trade.bump,
-          };
-        } catch (error) {
-          console.warn('Error processing trade account:', error);
-          return null; // Return null for accounts that can't be processed
-        }
-      })
-      .filter(trade => trade !== null); // Remove null entries
-      
-    console.log("Filtered trades for user:", filteredTrades.length);
-    return filteredTrades;
+
+  async findTradeAddress(
+    maker: PublicKey,
+    tokenMint: PublicKey
+  ): Promise<[PublicKey, number]> {
+    return await PublicKey.findProgramAddress(
+      [
+        Buffer.from("trade"),
+        maker.toBuffer(),
+        tokenMint.toBuffer(),
+      ],
+      this.program.programId
+    );
   }
 
-  private convertTradeStatus(status: any): TradeStatus {
+  async depositEscrow(
+    tradePDA: PublicKey,
+    depositor: WalletWithPublicKey,
+    depositorTokenAccount: PublicKey,
+    escrowAccount: PublicKey,
+    amount: BN
+  ): Promise<void> {
+    if (!depositor.publicKey) {
+      throw new Error("Depositor public key is not available");
+    }
+
+    console.log("Depositing to escrow with depositor:", depositor.publicKey.toString());
+    console.log("Provider wallet:", this.wallet.publicKey.toString());
+    console.log("Depositor has keypair:", depositor.keypair !== undefined);
+
+    // Check if the depositor is the same as the provider wallet
+    const isProviderWallet = depositor.publicKey.equals(this.wallet.publicKey);
+    if (!isProviderWallet) {
+      console.warn("Warning: The depositor public key doesn't match the provider wallet public key");
+      console.warn("This may cause signature verification failures if the instruction requires the depositor to sign");
+    }
+
+    console.log("Deposit details:", {
+      tradePDA: tradePDA.toString(),
+      depositorTokenAccount: depositorTokenAccount.toString(),
+      escrowAccount: escrowAccount.toString(),
+      amount: amount.toString()
+    });
+
+    try {
+      // Create the method call but don't execute it yet
+      const method = this.program.methods
+        .depositEscrow(amount)
+        .accounts({
+          trade: tradePDA,
+          escrowAccount: escrowAccount,
+          depositor: depositor.publicKey,
+          depositorTokenAccount: depositorTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([]);
+      
+      // Special case for wallets with keypair but no signTransaction method
+      if ('keypair' in depositor && depositor.keypair && !depositor.signTransaction) {
+        console.log("Using depositor wallet with keypair directly for transaction");
+        
+        // Get the transaction object
+        const transaction = await method.transaction();
+        
+        // Set recent blockhash
+        const { blockhash } = await this.connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = depositor.publicKey;
+        
+        // Sign with keypair directly
+        console.log("Signing deposit transaction with direct keypair access");
+        transaction.partialSign(depositor.keypair);
+        
+        // Send and confirm
+        const serializedTx = transaction.serialize();
+        console.log("Deposit transaction serialized successfully with", transaction.signatures.length, "signatures");
+        
+        const txId = await this.connection.sendRawTransaction(serializedTx);
+        await this.connection.confirmTransaction(txId, 'confirmed');
+        console.log("Deposit transaction confirmed with ID:", txId);
+      }
+      // If we're not using the provider's wallet, we need a custom approach
+      else if (!isProviderWallet && depositor.signTransaction) {
+        console.log("Using custom transaction signing approach since depositor doesn't match provider");
+        
+        // Get the transaction object
+        const transaction = await method.transaction();
+        
+        // Set recent blockhash
+        const { blockhash } = await this.connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = depositor.publicKey;
+        
+        // Sign with the depositor wallet
+        const signedTx = await depositor.signTransaction(transaction);
+        
+        // Send and confirm
+        const txId = await this.connection.sendRawTransaction(signedTx.serialize());
+        await this.connection.confirmTransaction(txId, 'confirmed');
+        console.log("Deposit transaction confirmed with ID:", txId);
+      } else {
+        // Use the Anchor Program's normal flow which uses the provider's wallet
+        await method.rpc();
+      }
+      
+      console.log("Deposit completed successfully");
+    } catch (error) {
+      console.error("Error in depositEscrow transaction:", error);
+      throw error;
+    }
+  }
+
+  async getTradesByUser(userPublicKey: PublicKey): Promise<Trade[]> {
+    try {
+      console.log(`Searching for trades involving user: ${userPublicKey.toString()}`);
+      
+      // Get all accounts owned by our program
+      const accounts = await this.connection.getProgramAccounts(this.program.programId, {
+        commitment: 'confirmed',
+        filters: [
+          {
+            dataSize: 8 + 32 + (1 + 32) + 8 + 8 + 32 + 32 + 1 + 8 + 8 + 1, // Size of Trade account
+          }
+        ]
+      });
+      
+      console.log(`Found ${accounts.length} total accounts owned by the program`);
+      
+      const trades: Trade[] = [];
+      
+      for (const account of accounts) {
+        try {
+          // Fetch and decode each account
+          console.log(`Checking account: ${account.pubkey.toString()}`);
+          const accountInfo = await this.program.account.trade.fetch(account.pubkey);
+          
+          console.log(`Account data:`, {
+            maker: accountInfo.maker.toString(),
+            taker: accountInfo.taker ? accountInfo.taker.toString() : null,
+          });
+          
+          // Check if this trade belongs to the user
+          const makerPubkey = accountInfo.maker as PublicKey;
+          const takerPubkey = accountInfo.taker as PublicKey | null;
+          
+          const isMaker = makerPubkey.equals(userPublicKey);
+          const isTaker = takerPubkey && takerPubkey.equals(userPublicKey);
+          
+          console.log(`Is maker: ${isMaker}, Is taker: ${isTaker}`);
+          
+          if (isMaker || isTaker) {
+            console.log(`Found matching trade: ${account.pubkey.toString()}`);
+            const trade: Trade = {
+              publicKey: account.pubkey,
+              maker: makerPubkey,
+              taker: takerPubkey,
+              amount: accountInfo.amount as BN,
+              price: accountInfo.price as BN,
+              tokenMint: accountInfo.tokenMint as PublicKey,
+              escrowAccount: accountInfo.escrowAccount as PublicKey,
+              status: this.convertTradeStatus(accountInfo.status),
+              createdAt: (accountInfo.createdAt as BN).toNumber(),
+              updatedAt: (accountInfo.updatedAt as BN).toNumber(),
+              bump: accountInfo.bump as number,
+            };
+            trades.push(trade);
+          }
+        } catch (error) {
+          console.error(`Error processing account ${account.pubkey.toString()}:`, error);
+        }
+      }
+      
+      console.log(`Returning ${trades.length} trades for user ${userPublicKey.toString()}`);
+      return trades;
+    } catch (error) {
+      console.error("Error in getTradesByUser:", error);
+      return []; // Return empty array on error
+    }
+  }
+
+  private convertTradeStatus(status: TradeStatusVariant): TradeStatus {
     if ('created' in status) return TradeStatus.Created;
     if ('open' in status) return TradeStatus.Open;
     if ('inProgress' in status) return TradeStatus.InProgress;
@@ -528,542 +861,404 @@ class TradeClient {
     if ('disputed' in status) return TradeStatus.Disputed;
     throw new Error('Unknown trade status');
   }
-
-  async depositTradeEscrow(
-    tradePDA: PublicKey,
-    depositor: any,
-    amount: number
-  ): Promise<void> {
-    console.log(
-      "TradeClient.depositTradeEscrow called",
-      "Type of depositor:", typeof depositor,
-      "Public key:", depositor.publicKey.toString(),
-      "Amount:", amount,
-      "Trade PDA:", tradePDA.toString()
-    );
-    
-    // First, fetch the trade to get the escrow account
-    console.log("Fetching trade to get escrow account...");
-    const trade = await this.getTrade(tradePDA);
-    if (!trade || !trade.escrowAccount) {
-      throw new Error("Failed to get escrow account from trade");
-    }
-    
-    console.log("Found escrow account:", trade.escrowAccount.toString());
-    
-    // Define the SOL token mint address (for Wrapped SOL)
-    const SOL_TOKEN_MINT = new PublicKey('So11111111111111111111111111111111111111112');
-    
-    // Create instructions for a proper token-based deposit flow
-    const instructions: TransactionInstruction[] = [];
-    
-    // 1. Get or create the Associated Token Account (ATA) for WSOL
-    const depositorTokenAccount = await getAssociatedTokenAddress(
-      SOL_TOKEN_MINT,
-      depositor.publicKey
-    );
-    console.log("Using ATA for WSOL:", depositorTokenAccount.toString());
-    
-    // 2. Check if the token account already exists
-    let wsTokenAccount;
-    try {
-      wsTokenAccount = await getAccount(this.connection, depositorTokenAccount);
-      console.log("WSOL account exists with balance:", wsTokenAccount.amount.toString());
-    } catch (error) {
-      console.log("WSOL account doesn't exist, will create");
-      
-      // Create the ATA for WSOL
-      const createATAIx = createAssociatedTokenAccountInstruction(
-        depositor.publicKey,  // Payer
-        depositorTokenAccount, // ATA address
-        depositor.publicKey,  // Owner
-        SOL_TOKEN_MINT        // Mint
-      );
-      instructions.push(createATAIx);
-    }
-    
-    // 3. Create instruction to wrap SOL into WSOL (fund the token account)
-    // We add a little extra to cover rent exemption and account creation
-    const wrapSolIx = SystemProgram.transfer({
-      fromPubkey: depositor.publicKey,
-      toPubkey: depositorTokenAccount,
-      lamports: amount
-    });
-    instructions.push(wrapSolIx);
-    
-    // 4. We need a sync native instruction to sync the token balance
-    const syncNativeIx = createSyncNativeInstruction(depositorTokenAccount);
-    instructions.push(syncNativeIx);
-    
-    // 5. Now prepare the deposit escrow instruction
-    const depositEscrowIx = await this.program.methods
-      .depositEscrow(new BN(amount))
-      .accounts({
-        trade: tradePDA,
-        escrowAccount: trade.escrowAccount,
-        depositor: depositor.publicKey,
-        depositorTokenAccount: depositorTokenAccount,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      })
-      .instruction();
-    
-    instructions.push(depositEscrowIx);
-    
-    // 6. Optionally add an instruction to close the token account after the deposit
-    // to get SOL back from rent exemption (usually a good practice)
-    // Note: We skip this to keep the example simpler, but it's recommended in production
-    
-    // Get the recent blockhash
-    const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash('confirmed');
-    
-    // Create a transaction with all our instructions
-    const tx = new Transaction();
-    tx.add(...instructions);
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = depositor.publicKey;
-    
-    try {
-      // MAX_RETRY_ATTEMPTS for blockhash related issues
-      const MAX_RETRY_ATTEMPTS = 3;
-      let attempt = 0;
-      let lastError: any = null;
-      
-      // Retry loop for handling blockhash issues
-      while (attempt < MAX_RETRY_ATTEMPTS) {
-        attempt++;
-        console.log(`Attempt ${attempt} to deposit to escrow using WSOL flow`);
-        
-        try {
-          // Sign the transaction
-          if (depositor.keypair) {
-            console.log("Signing transaction with keypair");
-            tx.partialSign(depositor.keypair);
-          } else if (depositor.signTransaction) {
-            console.log("Signing transaction with wallet adapter");
-            await depositor.signTransaction(tx);
-          } else {
-            throw new Error("Wallet does not support transaction signing");
-          }
-          
-          // Send the transaction
-          console.log("Sending signed transaction to the network");
-          const rawTransaction = tx.serialize();
-          const txid = await this.connection.sendRawTransaction(rawTransaction, {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed'
-          });
-          
-          console.log("Transaction sent with ID:", txid);
-          
-          // Wait for confirmation with timeout warning
-          const timeoutId = setTimeout(() => {
-            console.log("Transaction confirmation taking longer than expected (15s)...");
-          }, 15000);
-          
-          // Wait for confirmation
-          const confirmation = await this.connection.confirmTransaction({
-            blockhash,
-            lastValidBlockHeight,
-            signature: txid
-          }, 'confirmed');
-          
-          // Clear the timeout
-          clearTimeout(timeoutId);
-          
-          // Check if confirmed successfully
-          if (confirmation.value.err) {
-            console.error("Transaction confirmed but had an error:", confirmation.value.err);
-            throw new Error(`Transaction error: ${JSON.stringify(confirmation.value.err)}`);
-          }
-          
-          console.log("Transaction confirmed successfully!");
-          return; // Success, exit the retry loop
-          
-        } catch (error: any) {
-          lastError = error;
-          console.error(`Attempt ${attempt} failed:`, error);
-          
-          // Only retry for specific errors related to blockhash or signatures
-          if (error.message && (
-              error.message.includes('blockhash') || 
-              error.message.includes('signature') ||
-              error.message.includes('timeout')
-          )) {
-            // Wait a bit before retrying
-            if (attempt < MAX_RETRY_ATTEMPTS) {
-              console.log(`Waiting before retry attempt ${attempt + 1}...`);
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              
-              // Get a fresh blockhash for the next attempt
-              const { blockhash: newBlockhash } = await this.connection.getLatestBlockhash('confirmed');
-              console.log(`Got fresh blockhash for retry: ${newBlockhash.substring(0, 8)}...`);
-            }
-          } else {
-            // For other errors, don't retry
-            break;
-          }
-        }
-      }
-      
-      // If we get here, all attempts failed
-      throw lastError || new Error("Failed to deposit after multiple attempts");
-      
-    } catch (error) {
-      console.error("TradeClient.depositTradeEscrow error:", error);
-      throw error; // Re-throw to be handled by the caller
-    }
-  }
 }
 
-// Public API
+// Properly type the trade return type
+interface TradeInfo {
+  id: string;
+  maker: string;
+  taker: string | null;
+  amount: number;
+  price: number;
+  tokenMint: string;
+  escrowAccount: string;
+  status: TradeStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Public API functions
+// These exposed functions are simplified wrappers around the client methods
 export const createTrade = async (
   connection: Connection,
-  wallet: any,
-  offerPDA: PublicKey,
-  offerOwner: PublicKey,
-  amount: number
+  wallet: WalletWithPublicKey,
+  tokenMint: PublicKey,
+  amount: number,
+  price: number
 ): Promise<string | null> => {
   try {
-    // Prepare a properly formatted wallet object for Anchor
-    let anchorWallet = wallet;
+    console.log("createTrade called with params:", {
+      tokenMint: tokenMint ? tokenMint.toString() : 'undefined',
+      amount,
+      price,
+      walletPublicKey: wallet?.publicKey ? wallet.publicKey.toString() : 'undefined'
+    });
     
-    // If this is a local wallet with keypair (like from the localWalletStore)
-    if (wallet.keypair) {
-      // Create an Anchor compatible wallet using the keypair
-      anchorWallet = {
-        publicKey: wallet.keypair.publicKey,
-        keypair: wallet.keypair,
-        // Add the signTransaction method that Anchor expects
-        signTransaction: async (tx: any) => {
-          tx.partialSign(wallet.keypair);
-          return tx;
-        },
-        signAllTransactions: async (txs: any[]) => {
-          return txs.map(tx => {
-            tx.partialSign(wallet.keypair);
-            return tx;
-          });
-        }
-      };
+    // Validate inputs
+    if (!connection) {
+      console.error("Cannot create trade with undefined connection");
+      throw new Error("Invalid connection");
     }
     
-    const client = await createTradeClient(connection, anchorWallet);
-    
-    // Get the offer details - first try to load from blockchain
-    let offerProgram;
-    try {
-      offerProgram = await Program.fetchIdl(new PublicKey(OFFER_PROGRAM_ID), new AnchorProvider(
-        connection,
-        anchorWallet,
-        { commitment: 'confirmed' }
-      ));
-    } catch (error) {
-      console.warn('Failed to fetch Offer IDL from the blockchain, trying local file:', error);
+    if (!wallet || !wallet.publicKey) {
+      console.error("Cannot create trade with undefined wallet or wallet without publicKey");
+      throw new Error("Invalid wallet");
     }
     
-    // If blockchain fetch failed, try to load from local file
-    if (!offerProgram) {
-      try {
-        // Try to load from the local file in public/idl directory
-        const response = await fetch('/idl/offer.json');
-        if (response.ok) {
-          offerProgram = await response.json();
-          console.log('Loaded Offer IDL from local file');
-        } else {
-          console.error('Failed to load local Offer IDL file');
-          toast.error('Failed to fetch offer program IDL');
-          return null;
-        }
-      } catch (fetchError) {
-        console.error('Error loading local Offer IDL:', fetchError);
-        toast.error('Failed to fetch offer program IDL');
-        return null;
-      }
+    if (!tokenMint) {
+      console.error("Cannot create trade with undefined tokenMint");
+      throw new Error("Invalid token mint");
     }
     
-    if (!offerProgram) {
-      toast.error('Failed to fetch offer program IDL');
-      return null;
-    }
+    const client = await createTradeClient(connection, wallet);
+    console.log("Trade client created successfully");
     
-    const offerClient = new Program(offerProgram, new PublicKey(OFFER_PROGRAM_ID), new AnchorProvider(
-      connection,
-      anchorWallet,
-      { commitment: 'confirmed' }
-    ));
+    // Convert amount and price to BN
+    const amountBN = new BN(amount);
+    const priceBN = new BN(price);
     
-    const offerAccount = await offerClient.account.offer.fetch(offerPDA);
-    
-    // Convert amount to lamports (assuming SOL)
-    const amountBN = new BN(amount * 1e9); // Convert to lamports
-    
-    // Check if the wallet has enough tokens and airdrop if needed
+    // Check if user has enough tokens
     const hasEnoughTokens = await ensureSufficientTokens(
       connection,
-      anchorWallet,
-      offerAccount.tokenMint,
+      wallet,
+      tokenMint,
       amountBN
     );
     
     if (!hasEnoughTokens) {
-      toast.error('Insufficient tokens to create this trade');
+      toast.error('Insufficient token balance for trade');
       return null;
     }
     
-    // Create the trade using proper maker terminology (wallet is the maker)
-    const tradePDA = await client.createTrade(
-      anchorWallet,
-      offerPDA,
-      offerOwner,
-      offerAccount.tokenMint,
-      amountBN,
-      offerAccount.pricePerToken
+    // Get or create token account
+    console.log("Getting associated token address");
+    const makerTokenAccount = await getAssociatedTokenAddress(
+      tokenMint,
+      wallet.publicKey
     );
     
-    toast.success('Trade created successfully!');
-    return tradePDA.toString();
-  } catch (error: any) {
-    console.error('Error creating trade:', error);
+    // Check if we're using SOL token
+    const isSolToken = tokenMint.toString() === SOL_TOKEN_MINT;
     
-    // Parse and display error
-    const errorMessage = error.message || 'Failed to create trade';
-    toast.error(errorMessage);
+    if (isSolToken) {
+      // For SOL tokens, we need to check if the ATA exists and create it if needed
+      console.log("Using SOL token, checking if associated token account exists");
+      
+      try {
+        // Try to get the account, if it fails with AccountNotFoundError, create it
+        await getAccount(connection, makerTokenAccount);
+        console.log("SOL token account already exists");
+      } catch (error: unknown) {
+        // Type guard to check if error has name property
+        if (error && typeof error === 'object' && 'name' in error && error.name === 'TokenAccountNotFoundError') {
+          console.log("SOL token account does not exist, creating it...");
+          
+          // Create the transaction to create the associated token account
+          const transaction = new Transaction();
+          
+          // Add instruction to create associated token account
+          transaction.add(
+            createAssociatedTokenAccountInstruction(
+              wallet.publicKey, // payer
+              makerTokenAccount, // associated token account address
+              wallet.publicKey, // owner
+              tokenMint // mint
+            )
+          );
+          
+          // Add instruction to wrap SOL
+          transaction.add(
+            SystemProgram.transfer({
+              fromPubkey: wallet.publicKey,
+              toPubkey: makerTokenAccount,
+              lamports: amountBN.toNumber() // Transfer the amount needed for the trade
+            })
+          );
+          
+          // Add instruction to sync native
+          transaction.add(
+            createSyncNativeInstruction(makerTokenAccount)
+          );
+          
+          // Set recent blockhash
+          const { blockhash } = await connection.getLatestBlockhash();
+          transaction.recentBlockhash = blockhash;
+          transaction.feePayer = wallet.publicKey;
+          
+          // Sign and send the transaction
+          if ('keypair' in wallet && wallet.keypair) {
+            console.log("Signing token account creation with wallet keypair");
+            // Use the keypair directly
+            transaction.sign(wallet.keypair);
+            const serializedTx = transaction.serialize();
+            const txId = await connection.sendRawTransaction(serializedTx);
+            await connection.confirmTransaction(txId, 'confirmed');
+            console.log("Token account created with ID:", txId);
+          } else if (wallet.signTransaction) {
+            console.log("Signing token account creation with wallet.signTransaction");
+            const signedTx = await wallet.signTransaction(transaction);
+            const txId = await connection.sendRawTransaction(signedTx.serialize());
+            await connection.confirmTransaction(txId, 'confirmed');
+            console.log("Token account created with ID:", txId);
+          } else {
+            // No way to sign, abort
+            console.error("Cannot create token account - no way to sign transactions");
+            toast.error('Failed to create token account. No signing method available.');
+            return null;
+          }
+          
+          // Wait a little to ensure the token account is recognized
+          console.log("Waiting for token account to be recognized...");
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } else {
+          // Some other error occurred
+          console.error("Error checking token account:", error);
+          throw error;
+        }
+      }
+    }
+    
+    // Create escrow account
+    console.log("Generating escrow account keypair");
+    const escrowAccount = Keypair.generate();
+    
+    // Create the trade
+    console.log("Creating trade via client");
+    const tradePDA = await client.createTrade(
+      wallet,
+      tokenMint,
+      makerTokenAccount,
+      escrowAccount,
+      amountBN,
+      priceBN
+    );
+    
+    console.log("Trade created with PDA:", tradePDA.toString());
+    
+    // Deposit tokens to escrow
+    console.log("Depositing to escrow");
+    await client.depositEscrow(
+      tradePDA,
+      wallet,
+      makerTokenAccount,
+      escrowAccount.publicKey,
+      amountBN
+    );
+    
+    console.log("Trade and escrow deposit completed successfully");
+    return tradePDA.toString();
+  } catch (error) {
+    console.error("Error in createTrade:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    toast.error(`Failed to create trade: ${errorMessage}`);
     return null;
   }
 };
 
 export const getTrade = async (
   connection: Connection,
-  wallet: any,
+  wallet: WalletWithPublicKey,
   tradePDA: PublicKey
-): Promise<any | null> => {
+): Promise<TradeInfo | null> => {
   try {
     const client = await createTradeClient(connection, wallet);
     const trade = await client.getTrade(tradePDA);
     
-    // Convert to a more user-friendly format
+    // Format the trade data for the UI
     return {
-      id: tradePDA.toString(),
+      id: trade.publicKey?.toString() || tradePDA.toString(),
       maker: trade.maker.toString(),
       taker: trade.taker ? trade.taker.toString() : null,
-      amount: trade.amount.toNumber() / 1e9, // Convert from lamports to SOL
-      price: trade.price.toNumber() / 100, // Assuming price is in cents
+      amount: trade.amount.toNumber(),
+      price: trade.price.toNumber(),
+      tokenMint: trade.tokenMint.toString(),
+      escrowAccount: trade.escrowAccount.toString(),
       status: trade.status,
       createdAt: new Date(trade.createdAt * 1000),
       updatedAt: new Date(trade.updatedAt * 1000),
-      escrowAccount: trade.escrowAccount,
-      tokenMint: trade.tokenMint
     };
-  } catch (error: any) {
-    console.error('Error fetching trade:', error);
-    toast.error(error.message || 'Failed to fetch trade details');
+  } catch (error) {
+    console.error('Error getting trade:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    toast.error(errorMessage || 'Failed to get trade');
     return null;
   }
 };
 
 export const getUserTrades = async (
   connection: Connection,
-  wallet: any
-): Promise<any[]> => {
+  wallet: WalletWithPublicKey
+): Promise<TradeInfo[]> => {
   try {
-    console.log("getUserTrades called - wallet:", wallet.publicKey?.toString());
-    
-    if (!wallet.publicKey) {
-      console.log("No wallet public key found");
+    if (!wallet || !wallet.publicKey) {
+      console.error('Wallet not properly configured for getUserTrades');
       return [];
     }
     
     const client = await createTradeClient(connection, wallet);
-    console.log("Trade client created successfully");
+    const trades = await client.getTradesByUser(wallet.publicKey);
     
-    try {
-      const trades = await client.getTradesByUser(wallet.publicKey);
-      console.log("Raw trades fetched:", trades.length);
-      
-      // Convert to a more user-friendly format
-      const formattedTrades = trades.map((trade: any) => {
-        const result = {
-          id: trade.publicKey.toString(),
-          maker: trade.maker ? trade.maker.toString() : null,
-          taker: trade.taker ? trade.taker.toString() : null,
-          amount: trade.amount.toNumber() / 1e9, // Convert from lamports to SOL
-          price: trade.price.toNumber() / 100, // Assuming price is in cents
-          status: trade.status,
-          createdAt: new Date(trade.createdAt * 1000),
-          updatedAt: new Date(trade.updatedAt * 1000)
-        };
-        console.log("Formatted trade:", result);
-        return result;
-      });
-      
-      console.log("Returning formatted trades:", formattedTrades.length);
-      return formattedTrades;
-    } catch (fetchError: any) {
-      console.error('Error fetching trades from client:', fetchError);
-      toast.error(fetchError.message || 'Failed to load trades');
-      return [];
-    }
-  } catch (error: any) {
-    console.error('Error in getUserTrades:', error);
-    toast.error(error.message || 'Failed to fetch user trades');
+    // Format the trades for the UI
+    return trades.map(trade => ({
+      id: trade.publicKey?.toString() || 'unknown-id',
+      maker: trade.maker.toString(),
+      taker: trade.taker ? trade.taker.toString() : null,
+      amount: trade.amount.toNumber(),
+      price: trade.price.toNumber(),
+      tokenMint: trade.tokenMint.toString(),
+      escrowAccount: trade.escrowAccount.toString(),
+      status: trade.status,
+      createdAt: new Date(trade.createdAt * 1000),
+      updatedAt: new Date(trade.updatedAt * 1000),
+    }));
+  } catch (error) {
+    console.error('Error getting user trades:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    toast.error(errorMessage || 'Failed to get user trades');
     return [];
   }
 };
 
 export const acceptTrade = async (
   connection: Connection,
-  wallet: any,
+  wallet: WalletWithPublicKey,
   tradePDA: PublicKey
 ): Promise<boolean> => {
   try {
     const client = await createTradeClient(connection, wallet);
-    await client.acceptTrade(tradePDA, wallet); // wallet becomes the taker
-    toast.success('Trade accepted successfully!');
+    await client.acceptTrade(tradePDA, wallet);
+    toast.success('Trade accepted successfully');
     return true;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error accepting trade:', error);
-    toast.error(error.message || 'Failed to accept trade');
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    toast.error(errorMessage || 'Failed to accept trade');
     return false;
   }
 };
 
 export const completeTrade = async (
   connection: Connection,
-  wallet: any,
-  tradePDA: PublicKey
+  wallet: WalletWithPublicKey,
+  tradePDA: PublicKey,
+  maker: PublicKey,
+  taker: PublicKey,
+  escrowAccount: PublicKey,
+  takerTokenAccount: PublicKey,
+  priceOracle: PublicKey,
+  takerProfile: PublicKey,
+  makerProfile: PublicKey
 ): Promise<boolean> => {
   try {
     const client = await createTradeClient(connection, wallet);
-    await client.completeTrade(tradePDA, wallet); // Either maker or taker can complete
-    toast.success('Trade completed successfully!');
+    await client.completeTrade(
+      tradePDA,
+      { publicKey: maker },
+      { publicKey: taker },
+      escrowAccount,
+      takerTokenAccount,
+      priceOracle,
+      takerProfile,
+      makerProfile
+    );
+    toast.success('Trade completed successfully');
     return true;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error completing trade:', error);
-    toast.error(error.message || 'Failed to complete trade');
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    toast.error(errorMessage || 'Failed to complete trade');
     return false;
   }
 };
 
 export const cancelTrade = async (
   connection: Connection,
-  wallet: any,
-  tradePDA: PublicKey
+  wallet: WalletWithPublicKey,
+  tradePDA: PublicKey,
+  escrowAccount: PublicKey,
+  makerTokenAccount: PublicKey
 ): Promise<boolean> => {
   try {
     const client = await createTradeClient(connection, wallet);
-    await client.cancelTrade(tradePDA, wallet); // Only maker can cancel
-    toast.success('Trade cancelled successfully!');
+    await client.cancelTrade(tradePDA, wallet, escrowAccount, makerTokenAccount);
+    toast.success('Trade cancelled successfully');
     return true;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error cancelling trade:', error);
-    toast.error(error.message || 'Failed to cancel trade');
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    toast.error(errorMessage || 'Failed to cancel trade');
     return false;
   }
 };
 
 export const disputeTrade = async (
   connection: Connection,
-  wallet: any,
+  wallet: WalletWithPublicKey,
   tradePDA: PublicKey
 ): Promise<boolean> => {
   try {
     const client = await createTradeClient(connection, wallet);
-    await client.disputeTrade(tradePDA, wallet); // Either maker or taker can dispute
-    toast.success('Trade dispute initiated!');
+    await client.disputeTrade(tradePDA, wallet);
+    toast.success('Trade disputed successfully');
     return true;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error disputing trade:', error);
-    toast.error(error.message || 'Failed to dispute trade');
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    toast.error(errorMessage || 'Failed to dispute trade');
     return false;
   }
 };
 
-// Export a new function for depositing to escrow separately
 export const depositTradeEscrow = async (
   connection: Connection,
-  wallet: any,
+  wallet: WalletWithPublicKey,
   tradePDA: PublicKey,
   tokenMint: PublicKey,
   amount: number
 ): Promise<boolean> => {
-  console.log(`Starting deposit of ${amount} SOL for trade ${tradePDA.toString()}`);
-  console.log(`Using wallet type: ${wallet.keypair ? 'Local wallet with keypair' : 'Browser wallet'}`);
-  
   try {
-    // Prepare a properly formatted wallet object for Anchor
-    const walletForAnchor = wallet.keypair ? {
-      publicKey: wallet.publicKey,
-      signTransaction: async (tx: Transaction) => {
-        tx.partialSign(wallet.keypair);
-        return tx;
-      },
-      signAllTransactions: async (txs: Transaction[]) => {
-        txs.forEach(tx => tx.partialSign(wallet.keypair));
-        return txs;
-      },
-      keypair: wallet.keypair
-    } : wallet;
+    const client = await createTradeClient(connection, wallet);
     
-    console.log(`Deposit wallet public key: ${walletForAnchor.publicKey.toString()}`);
-    if (walletForAnchor.keypair) {
-      console.log(`Local wallet keypair details - Secret key length: ${walletForAnchor.keypair.secretKey.length}`);
-    }
+    // Convert amount to BN
+    const amountBN = new BN(amount);
     
-    // Convert SOL amount to lamports
-    const lamports = LAMPORTS_PER_SOL * amount;
-    console.log(`Depositing ${lamports} lamports (${amount} SOL)`);
+    // Check if user has enough tokens
+    const hasEnoughTokens = await ensureSufficientTokens(
+      connection,
+      wallet,
+      tokenMint,
+      amountBN
+    );
     
-    // Check if wallet has sufficient tokens for deposit
-    const balance = await connection.getBalance(walletForAnchor.publicKey);
-    if (balance < lamports + 5000) { // Adding buffer for tx fee
-      console.error(`Insufficient balance. Required: ${lamports + 5000}, Available: ${balance}`);
-      toast.error(`Insufficient balance. You need at least ${amount + 0.000005} SOL`);
+    if (!hasEnoughTokens) {
+      toast.error('Insufficient token balance for deposit');
       return false;
     }
     
-    // Create a trade client
-    const tradeClient = await createTradeClient(connection, walletForAnchor);
-    console.log("Trade client created successfully");
+    // Get trade details to get escrow account
+    const trade = await client.getTrade(tradePDA);
     
-    // Using our full WSOL flow (create ATA, wrap SOL, deposit, etc.)
-    console.log(`Initiating WSOL-based deposit flow for trade: ${tradePDA.toString()}`);
-    console.log(`This will create a token account if needed, wrap SOL, and deposit to escrow`);
+    // Get token account
+    const depositorTokenAccount = await getAssociatedTokenAddress(
+      tokenMint,
+      wallet.publicKey
+    );
     
-    await tradeClient.depositTradeEscrow(tradePDA, walletForAnchor, lamports);
+    // Deposit tokens to escrow
+    await client.depositEscrow(
+      tradePDA,
+      wallet,
+      depositorTokenAccount,
+      trade.escrowAccount,
+      amountBN
+    );
     
-    console.log("Deposit to escrow completed successfully");
-    toast.success("Deposit to escrow completed!");
+    toast.success('Tokens deposited to escrow successfully');
     return true;
-    
-  } catch (error: any) {
-    console.error("Error in depositTradeEscrow:", error);
-    
-    // Handle specific Solana errors
-    if (error.message?.includes("blockhash")) {
-      console.error("Transaction blockhash expired or invalid");
-      toast.error("Transaction timed out. Please try again.");
-    } 
-    else if (error.message?.includes("0x1") || error.message?.includes("custom program error")) {
-      console.error("Program validation error:", error);
-      toast.error("Transaction rejected by program: Account validation failed. Check that you are the correct participant for this trade.");
-    }
-    else if (error.message?.includes("insufficient funds")) {
-      console.error("Insufficient funds for transaction");
-      toast.error("Insufficient funds to complete transaction");
-    }
-    else if (error.message?.includes("Invalid signer")) {
-      console.error("Invalid signer error:", error);
-      toast.error("Invalid wallet for signing this transaction");
-    }
-    else if (error.message?.includes("not recognized as a program")) {
-      console.error("Program ID error:", error);
-      toast.error("Contract program not found on this network");
-    }
-    else {
-      // Generic error
-      toast.error(error.message || "Failed to deposit to escrow");
-    }
-    
+  } catch (error) {
+    console.error('Error depositing to escrow:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    toast.error(errorMessage || 'Failed to deposit to escrow');
     return false;
   }
 }; 

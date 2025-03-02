@@ -154,15 +154,15 @@ export class OfferClient {
   async getOffer(offerPDA: PublicKey): Promise<Offer> {
     const account = await this.program.account.offer.fetch(offerPDA);
     return {
-      maker: account.maker,
-      tokenMint: account.tokenMint,
-      pricePerToken: account.pricePerToken,
-      minAmount: account.minAmount,
-      maxAmount: account.maxAmount,
+      maker: account.maker as PublicKey,
+      tokenMint: account.tokenMint as PublicKey,
+      pricePerToken: account.pricePerToken as BN,
+      minAmount: account.minAmount as BN,
+      maxAmount: account.maxAmount as BN,
       offerType: this.convertOfferType(account.offerType),
       status: this.convertOfferStatus(account.status),
-      createdAt: account.createdAt.toNumber(),
-      updatedAt: account.updatedAt.toNumber(),
+      createdAt: (account.createdAt as BN).toNumber(),
+      updatedAt: (account.updatedAt as BN).toNumber(),
     };
   }
 
@@ -196,15 +196,15 @@ export class OfferClient {
     return accounts.map(({ publicKey, account }) => ({
       publicKey,
       account: {
-        maker: account.maker,
-        tokenMint: account.tokenMint,
-        pricePerToken: account.pricePerToken,
-        minAmount: account.minAmount,
-        maxAmount: account.maxAmount,
+        maker: account.maker as PublicKey,
+        tokenMint: account.tokenMint as PublicKey,
+        pricePerToken: account.pricePerToken as BN,
+        minAmount: account.minAmount as BN,
+        maxAmount: account.maxAmount as BN,
         offerType: this.convertOfferType(account.offerType),
         status: this.convertOfferStatus(account.status),
-        createdAt: account.createdAt.toNumber(),
-        updatedAt: account.updatedAt.toNumber(),
+        createdAt: (account.createdAt as BN).toNumber(),
+        updatedAt: (account.updatedAt as BN).toNumber(),
       },
     }));
   }
