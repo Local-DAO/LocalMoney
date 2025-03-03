@@ -12,12 +12,7 @@ import bs58 from 'bs58';
 import { useLocalWalletStore } from '@/utils/localWallets';
 
 // Import SDK components when available
-// import { OfferClient, OfferType } from '@localmoney/solana-sdk';
-
-enum OfferType {
-  Buy = 'buy',
-  Sell = 'sell'
-}
+import { OfferClient, OfferType } from '@/../../contracts/solana/sdk/src/'
 
 export default function CreateOffer() {
   const router = useRouter();

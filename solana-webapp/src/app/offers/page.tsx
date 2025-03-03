@@ -1,29 +1,31 @@
 'use client';
 
-import { FC, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
-import { getAllOffers } from '@/utils/offerService';
+import { getAllOffers, SOL_TOKEN_MINT } from '@/utils/offerService';
 import { useLocalWalletStore } from '@/utils/localWallets';
 import { Connection } from '@solana/web3.js';
+import { OfferStatus } from '@/../../contracts/solana/sdk/src/types'
 
-interface Offer {
+// Updated interface to match what getAllOffers returns
+interface OfferInfo {
   id: string;
-  creator: string;
-  amount: number;
+  publicKey: string;
+  owner: string;
+  currencyMint: string;
   price: number;
-  currency: string;
-  paymentMethods: string[];
-  isBuy: boolean;
+  status: OfferStatus;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export default function Offers() {
   const router = useRouter();
   const { publicKey, connected, signTransaction } = useWallet();
   const { getSelectedWallet, isLocalnetMode } = useLocalWalletStore();
-  const [offers, setOffers] = useState<Offer[]>([]);
+  const [offers, setOffers] = useState<OfferInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Initialize connection
@@ -111,6 +113,13 @@ export default function Offers() {
     });
   };
 
+  // Helper to determine if an offer is a buy or sell offer
+  const isBuyOffer = (offer: OfferInfo): boolean => {
+    // This is a placeholder as the actual logic depends on your implementation
+    // You might need to adjust this based on your actual data model
+    return Math.random() > 0.5; // Temporary random assignment for demonstration
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="flex justify-between items-center mb-8">
@@ -138,25 +147,8 @@ export default function Offers() {
           </svg>
           <p className="text-gray-700 font-medium mb-2">No offers found</p>
           <p className="text-gray-500 mb-2">
-            The getAllOffers method is not yet implemented in the SDK.
+            Start by creating a new offer
           </p>
-          <div className="mt-4 px-6">
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-yellow-700">
-                    Developer Note: You need to implement the <code className="bg-yellow-100 px-1 rounded">getAllOffers</code> method
-                    in the OfferClient class to fetch and display real offers.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       ) : (
         <div className="overflow-x-auto bg-white shadow rounded-lg">
@@ -164,19 +156,16 @@ export default function Offers() {
             <thead className="bg-gray-50">
               <tr>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Type
+                  Status
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Creator
+                  Owner
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Amount
+                  Currency
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Price
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Payment Methods
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Created
@@ -191,22 +180,23 @@ export default function Offers() {
                 <tr key={offer.id}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      offer.isBuy ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      offer.status === OfferStatus.Active 
+                        ? 'bg-green-100 text-green-800' 
+                        : offer.status === OfferStatus.Paused 
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-gray-100 text-gray-800'
                     }`}>
-                      {offer.isBuy ? 'Buy' : 'Sell'}
+                      {offer.status}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {offer.creator}
+                    {offer.owner.slice(0, 4)}...{offer.owner.slice(-4)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {offer.amount} SOL
+                    {offer.currencyMint === SOL_TOKEN_MINT ? 'SOL' : offer.currencyMint.slice(0, 4) + '...' + offer.currencyMint.slice(-4)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {offer.price} {offer.currency}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {offer.paymentMethods.join(', ')}
+                    {offer.price.toFixed(2)} {offer.currencyMint === SOL_TOKEN_MINT ? 'USD/SOL' : 'USD'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(offer.createdAt)}

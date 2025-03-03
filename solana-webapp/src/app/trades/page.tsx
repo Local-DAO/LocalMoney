@@ -8,7 +8,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { getUserTrades } from '@/utils/tradeService';
 import { useLocalWalletStore } from '@/utils/localWallets';
-import { TradeStatus } from '@localmoney/solana-sdk';
+import { TradeStatus } from '@/../../contracts/solana/sdk'
 
 interface Trade {
   id: string;

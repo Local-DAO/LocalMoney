@@ -250,8 +250,5 @@
       "name": "InsufficientAmount",
       "msg": "Insufficient amount available"
     }
-  ],
-  "metadata": {
-    "address": "FSnCsffRYjRwbpzFCkbwSFtgfSNbxrpYUsq84opqG4wW"
-  }
+  ]
 }

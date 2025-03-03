@@ -45,7 +45,7 @@ export interface Profile {
 export interface Trade {
   publicKey?: PublicKey;
   maker: PublicKey;
-  taker: PublicKey;
+  taker: PublicKey | null;
   amount: BN;
   price: BN;
   tokenMint: PublicKey;
@@ -53,10 +53,16 @@ export interface Trade {
   status: TradeStatus;
   createdAt: number;
   updatedAt: number;
-  bump: number;
+  bump?: number;
+}
+
+export interface TradeWithPublicKey extends Trade {
+  publicKey: PublicKey;
+  account?: Trade;
 }
 
 export interface Offer {
+  publicKey?: PublicKey;
   maker: PublicKey;
   tokenMint: PublicKey;
   pricePerToken: BN;
@@ -66,4 +72,16 @@ export interface Offer {
   status: OfferStatus;
   createdAt: number;
   updatedAt: number;
+}
+
+// Add a separate implementation type to handle the getter methods
+export type OfferWithGetters = Offer & {
+  // Alias properties for compatibility with frontend code
+  currencyMint: PublicKey;
+  price: BN;
+}
+
+export interface OfferWithPublicKey extends Offer {
+  publicKey: PublicKey;
+  account?: Offer;
 } 

@@ -295,8 +295,5 @@
       "name": "UnauthorizedTrader",
       "msg": "Unauthorized trader"
     }
-  ],
-  "metadata": {
-    "address": "2ebQZghoJAExZ64eUuw5xq7GVycibtsyA2yPKgfNSYNj"
-  }
+  ]
 }

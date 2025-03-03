@@ -150,7 +150,21 @@ export default function ViewOffer() {
       if (offerDetails) {
         // Log the full offer details to help debug
         console.log('Received offer details:', offerDetails);
-        setOffer(offerDetails);
+        
+        // Map the service's OfferInfo to our component's OfferDetails interface
+        // Note: minAmount and maxAmount are in lamports, convert to SOL (1 SOL = 1,000,000,000 lamports)
+        setOffer({
+          id: offerDetails.id,
+          creator: offerDetails.owner,
+          price: offerDetails.price,
+          minAmount: offerDetails.minAmount ? parseFloat(offerDetails.minAmount) / 1_000_000_000 : 0,
+          maxAmount: offerDetails.maxAmount ? parseFloat(offerDetails.maxAmount) / 1_000_000_000 : 0,
+          currency: offerDetails.currencyMint === 'So11111111111111111111111111111111111111112' ? 'SOL' : offerDetails.currencyMint,
+          paymentMethods: [], // Default empty array for payment methods
+          isBuy: false, // Default value
+          createdAt: offerDetails.createdAt,
+          status: offerDetails.status
+        });
       } else {
         setError('Offer not found');
       }
@@ -455,16 +469,24 @@ export default function ViewOffer() {
                   <dt className="text-sm font-medium text-gray-500">Payment methods</dt>
                   <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
                     <ul className="border border-gray-200 rounded-md divide-y divide-gray-200">
-                      {offer.paymentMethods.map((method, index) => (
-                        <li key={index} className="pl-3 pr-4 py-3 flex items-center justify-between text-sm">
+                      {offer.paymentMethods && offer.paymentMethods.length > 0 ? (
+                        offer.paymentMethods.map((method, index) => (
+                          <li key={index} className="pl-3 pr-4 py-3 flex items-center justify-between text-sm">
+                            <div className="w-0 flex-1 flex items-center">
+                              <svg className="flex-shrink-0 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                              </svg>
+                              <span className="ml-2 flex-1 w-0 truncate">{method}</span>
+                            </div>
+                          </li>
+                        ))
+                      ) : (
+                        <li className="pl-3 pr-4 py-3 flex items-center justify-between text-sm">
                           <div className="w-0 flex-1 flex items-center">
-                            <svg className="flex-shrink-0 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                            </svg>
-                            <span className="ml-2 flex-1 w-0 truncate">{method}</span>
+                            <span className="ml-2 flex-1 w-0 truncate text-gray-500">No payment methods specified</span>
                           </div>
                         </li>
-                      ))}
+                      )}
                     </ul>
                   </dd>
                 </div>

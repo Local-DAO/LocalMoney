@@ -234,8 +234,5 @@
       "name": "InvalidTradeProgram",
       "msg": "Invalid trade program"
     }
-  ],
-  "metadata": {
-    "address": "8FJf3ymGwZ2ctUP85QRCsE2kMcuQY5Eu7X3dyXr7XakD"
-  }
+  ]
 }
