@@ -265,8 +265,10 @@ describe("offer", () => {
     } = await setupCreator();
 
     try {
-      // Create 3 offers with different parameters
-      const offer1 = await offerClient.createOffer(
+      const initialOffers = await offerClient.getAllOffers();
+      const initialOfferCount = initialOffers.length;
+
+      await offerClient.createOffer(
         creator,
         tokenMint,
         new anchor.BN(100_000), // $1.00
@@ -274,9 +276,9 @@ describe("offer", () => {
         new anchor.BN(1000_000), // 1 token
         OfferType.Sell
       );
-      await delay(1000); // Wait for transaction to be confirmed
+      await delay(333); // Wait for transaction to be confirmed
 
-      const offer2 = await offerClient.createOffer(
+      await offerClient.createOffer(
         creator,
         tokenMint,
         new anchor.BN(110_000), // $1.10
@@ -284,32 +286,35 @@ describe("offer", () => {
         new anchor.BN(900_000), // 0.9 token
         OfferType.Sell
       );
-      await delay(1000); // Wait for transaction to be confirmed
+      await delay(333); // Wait for transaction to be confirmed
 
-      const offer3 = await offerClient.createOffer(
+      await offerClient.createOffer(
         creator,  
         tokenMint,
         new anchor.BN(120_000), // $1.20
         new anchor.BN(300_000), // 0.3 token
         new anchor.BN(800_000), // 0.8 token
         OfferType.Sell
-      );  
-      await delay(1000); // Wait for transaction to be confirmed
+      );
+      await delay(333); // Wait for transaction to be confirmed
 
       // Load all offers
       const allOffers = await offerClient.getAllOffers();
-      expect(allOffers.length).to.equal(3);
+      expect(allOffers.length).to.equal(initialOfferCount + 3);
+      const offer1 = allOffers[initialOfferCount];
+      const offer2 = allOffers[initialOfferCount + 1];
+      const offer3 = allOffers[initialOfferCount + 2];
 
       // Check each offer's parameters
-      expect(allOffers[0].pricePerToken.toNumber()).to.equal(100_000);
-      expect(allOffers[0].minAmount.toNumber()).to.equal(100_000);
-      expect(allOffers[0].maxAmount.toNumber()).to.equal(1000_000);
-      expect(allOffers[1].pricePerToken.toNumber()).to.equal(110_000);
-      expect(allOffers[1].minAmount.toNumber()).to.equal(200_000);
-      expect(allOffers[1].maxAmount.toNumber()).to.equal(900_000);
-      expect(allOffers[2].pricePerToken.toNumber()).to.equal(120_000);
-      expect(allOffers[2].minAmount.toNumber()).to.equal(300_000);
-      expect(allOffers[2].maxAmount.toNumber()).to.equal(800_000);
+      expect(offer1.pricePerToken.toNumber()).to.equal(100_000);
+      expect(offer1.minAmount.toNumber()).to.equal(100_000);
+      expect(offer1.maxAmount.toNumber()).to.equal(1000_000);
+      expect(offer2.pricePerToken.toNumber()).to.equal(110_000);
+      expect(offer2.minAmount.toNumber()).to.equal(200_000);
+      expect(offer2.maxAmount.toNumber()).to.equal(900_000);
+      expect(offer3.pricePerToken.toNumber()).to.equal(120_000);
+      expect(offer3.minAmount.toNumber()).to.equal(300_000);
+      expect(offer3.maxAmount.toNumber()).to.equal(800_000);
     } catch (error) {
       console.error("Error creating and loading offers:", error);
       throw error;
