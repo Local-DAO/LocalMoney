@@ -172,7 +172,6 @@ describe("trade", () => {
 
       makerProfile = await profileClient.createProfile(maker, "maker");
     } catch (error) {
-      console.error("Error setting up test environment:", error);
       throw error;
     }
   });
@@ -245,7 +244,6 @@ describe("trade", () => {
       price
     );
     await delay(500);
-    console.log('Trade created: tradePDA', tradePDA.toString());
 
     // Now deposit to escrow
     await tradeClient.depositEscrow(

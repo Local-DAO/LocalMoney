@@ -15,11 +15,9 @@ export class TradeClient {
     }
     this.program = new Program(idl, programId, provider);
     if (!this.program.methods || !this.program.methods.createTrade) {
-      console.error("Program methods not initialized. Available:", Object.keys(this.program.methods || {}));
       throw new Error("Program methods not available");
     }
     this.connection = provider.connection;
-    console.log("TradeClient initialized with methods:", Object.keys(this.program.methods));
   }
 
   // For creating a new trade
@@ -58,18 +56,6 @@ export class TradeClient {
     amount: BN,
     price: BN
   ): Promise<PublicKey> {
-    // Add debug logging
-    console.log("takerWallet type:", typeof takerWallet);
-    console.log("takerWallet instanceof Keypair:", takerWallet instanceof Keypair);
-    console.log("hasKeypair result:", hasKeypair(takerWallet));
-    
-    if (takerWallet instanceof Keypair) {
-      console.log("Direct Keypair detected");
-    } else {
-      console.log("WalletAdapter detected");
-      console.log("WalletAdapter properties:", Object.keys(takerWallet));
-    }
-    
     // Create wallet adapter
     const takerAdapter = createWalletAdapter(takerWallet);
     
@@ -80,7 +66,6 @@ export class TradeClient {
       amount
     );
     const [tradePDA, bump] = PublicKey.findProgramAddressSync(tradeSeed, this.program.programId);
-    console.log("Trade PDA:", tradePDA.toString());
     
     try {
       // Create the trade on-chain
@@ -117,7 +102,6 @@ export class TradeClient {
       
       // Check if we're using a browser wallet and adjust signing process
       if (takerAdapter.publicKey && !hasKeypair(takerWallet)) {
-        console.log("Using browser wallet signing flow");
         try {
           // First, sign with the escrow account
           transaction.sign(escrowAccount);
@@ -131,18 +115,15 @@ export class TradeClient {
           }
           
           // Send the fully signed transaction
-          console.log("Sending transaction with multiple signers via browser wallet");
           const txid = await this.connection.sendRawTransaction(signedTx.serialize(), {
             skipPreflight: false,
             preflightCommitment: 'confirmed'
           });
           
           await this.connection.confirmTransaction(txid, 'confirmed');
-          console.log("Transaction confirmed:", txid);
           
           return tradePDA;
         } catch (browserWalletError) {
-          console.error("Error with browser wallet flow:", browserWalletError);
           const errorMessage = browserWalletError instanceof Error 
             ? browserWalletError.message 
             : String(browserWalletError);
@@ -154,13 +135,10 @@ export class TradeClient {
         const signedTx = await takerAdapter.signTransaction(transaction);
         const txid = await this.connection.sendRawTransaction(signedTx.serialize());
         await this.connection.confirmTransaction(txid, 'confirmed');
-        console.log("Transaction confirmed:", txid);
       }
       
-      console.log("Trade created: tradePDA", tradePDA.toString());
       return tradePDA;
     } catch (error) {
-      console.error("Error creating trade:", error);
       throw error;
     }
   }
@@ -220,10 +198,7 @@ export class TradeClient {
       
       // Sign and send the transaction
       await traderAdapter.signAndSendTransaction!(this.connection, tx);
-      
-      console.log("Trade completed");
     } catch (error) {
-      console.error("Error completing trade:", error);
       throw error;
     }
   }
@@ -259,10 +234,7 @@ export class TradeClient {
       
       // Sign and send the transaction
       await traderAdapter.signAndSendTransaction!(this.connection, tx);
-      
-      console.log("Trade cancelled");
     } catch (error) {
-      console.error("Error cancelling trade:", error);
       throw error;
     }
   }
@@ -295,10 +267,7 @@ export class TradeClient {
       
       // Sign and send the transaction
       await disputerAdapter.signAndSendTransaction!(this.connection, tx);
-      
-      console.log("Trade disputed");
     } catch (error) {
-      console.error("Error disputing trade:", error);
       throw error;
     }
   }
@@ -322,7 +291,6 @@ export class TradeClient {
         bump: tradeAccount.bump
       };
     } catch (error) {
-      console.error("Error fetching trade:", error);
       throw error;
     }
   }
@@ -399,10 +367,7 @@ export class TradeClient {
       
       // Sign and send the transaction
       await depositorAdapter.signAndSendTransaction!(this.connection, tx);
-      
-      console.log("Deposited to escrow");
     } catch (error) {
-      console.error("Error depositing to escrow:", error);
       throw error;
     }
   }
@@ -449,7 +414,6 @@ export class TradeClient {
       
       return trades;
     } catch (error) {
-      console.error("Error getting trades by user:", error);
       // Return mock data for testing purposes
       return [this.createMockTrade(userPubkey)];
     }

@@ -35,20 +35,14 @@ export class OfferClient {
     maxAmount: BN,
     offerType: OfferType
   ): Promise<string> {
-    console.log("makerWallet type:", typeof makerWallet);
-    console.log("makerWallet instanceof Keypair:", makerWallet instanceof Keypair);
-    
     // Check if the wallet has a keypair
     const hasKeypair = !!(makerWallet instanceof Keypair || (makerWallet as any)._keypair);
-    console.log("hasKeypair result:", hasKeypair);
     
     let makerPublicKey: PublicKey;
     
     if (makerWallet instanceof Keypair) {
       makerPublicKey = makerWallet.publicKey;
     } else {
-      console.log("WalletAdapter detected");
-      console.log("WalletAdapter properties:", Object.keys((makerWallet as any)));
       makerPublicKey = (makerWallet as WalletAdapter).publicKey;
     }
     
@@ -56,9 +50,6 @@ export class OfferClient {
     if (!(makerPublicKey instanceof PublicKey)) {
       makerPublicKey = new PublicKey(makerPublicKey);
     }
-    
-    console.log("makerPublicKey:", makerPublicKey.toString());
-    console.log("makerPublicKey instanceof PublicKey:", makerPublicKey instanceof PublicKey);
     
     try {
       // Find the offer PDA
@@ -69,8 +60,6 @@ export class OfferClient {
         minAmount,
         maxAmount
       );
-      
-      console.log("offerPDA:", offerPDA.toString());
       
       // Convert offerType to the format expected by the Anchor program
       const offerTypeArg = { [offerType === OfferType.Buy ? 'buy' : 'sell']: {} };
@@ -114,7 +103,6 @@ export class OfferClient {
       await this.connection.confirmTransaction(txid);
       return txid;
     } catch (error) {
-      console.error("Error in createOffer:", error);
       throw error;
     }
   }
@@ -185,7 +173,6 @@ export class OfferClient {
       await this.connection.confirmTransaction(txid);
       return txid;
     } catch (error) {
-      console.error("Error in updateOffer:", error);
       throw error;
     }
   }
@@ -245,7 +232,6 @@ export class OfferClient {
       await this.connection.confirmTransaction(txid);
       return txid;
     } catch (error) {
-      console.error("Error in pauseOffer:", error);
       throw error;
     }
   }
@@ -305,7 +291,6 @@ export class OfferClient {
       await this.connection.confirmTransaction(txid);
       return txid;
     } catch (error) {
-      console.error("Error in resumeOffer:", error);
       throw error;
     }
   }
@@ -365,7 +350,6 @@ export class OfferClient {
       await this.connection.confirmTransaction(txid);
       return txid;
     } catch (error) {
-      console.error("Error in closeOffer:", error);
       throw error;
     }
   }
@@ -428,7 +412,6 @@ export class OfferClient {
       return accounts.map(({ publicKey, account }) => {
         try {
           if (!account) {
-            console.warn(`Account data is null for offer ${publicKey.toString()}`);
             return null;
           }
 
@@ -452,12 +435,10 @@ export class OfferClient {
             account: offer
           } as OfferWithPublicKey;
         } catch (error) {
-          console.error(`Error processing offer ${publicKey.toString()}:`, error);
           return null;
         }
       }).filter((offer): offer is OfferWithPublicKey => offer !== null);
     } catch (error) {
-      console.error("Error in getAllOffers:", error);
       throw error;
     }
   }
@@ -570,7 +551,6 @@ export class OfferClient {
       await this.connection.confirmTransaction(txid);
       return txid;
     } catch (error) {
-      console.error("Error in unpauseOffer:", error);
       throw error;
     }
   }
