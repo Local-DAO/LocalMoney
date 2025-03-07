@@ -13,8 +13,8 @@ export interface PriceRoute {
 }
 
 export enum TradeStatus {
-  Open = 'open',
-  InProgress = 'inProgress',
+  Created = 'created',
+  EscrowDeposited = 'escrowDeposited',
   Completed = 'completed',
   Cancelled = 'cancelled',
   Disputed = 'disputed'
@@ -24,6 +24,11 @@ export enum OfferStatus {
   Active = 'active',
   Paused = 'paused',
   Closed = 'closed'
+}
+
+export enum OfferType {
+  Buy = 'buy',
+  Sell = 'sell'
 }
 
 export interface Profile {
@@ -38,8 +43,9 @@ export interface Profile {
 }
 
 export interface Trade {
-  seller: PublicKey;
-  buyer: PublicKey | null;
+  publicKey?: PublicKey;
+  maker: PublicKey;
+  taker: PublicKey | null;
   amount: BN;
   price: BN;
   tokenMint: PublicKey;
@@ -47,17 +53,35 @@ export interface Trade {
   status: TradeStatus;
   createdAt: number;
   updatedAt: number;
-  bump: number;
+  bump?: number;
+}
+
+export interface TradeWithPublicKey extends Trade {
+  publicKey: PublicKey;
+  account?: Trade;
 }
 
 export interface Offer {
-  creator: PublicKey;
+  publicKey?: PublicKey;
+  maker: PublicKey;
   tokenMint: PublicKey;
-  amount: BN;
   pricePerToken: BN;
   minAmount: BN;
   maxAmount: BN;
+  offerType: OfferType;
   status: OfferStatus;
   createdAt: number;
   updatedAt: number;
+}
+
+// Add a separate implementation type to handle the getter methods
+export type OfferWithGetters = Offer & {
+  // Alias properties for compatibility with frontend code
+  currencyMint: PublicKey;
+  price: BN;
+}
+
+export interface OfferWithPublicKey extends Offer {
+  publicKey: PublicKey;
+  account?: Offer;
 } 

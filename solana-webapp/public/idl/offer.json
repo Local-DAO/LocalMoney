@@ -1,0 +1,298 @@
+{
+  "version": "0.1.0",
+  "name": "offer",
+  "instructions": [
+    {
+      "name": "createOffer",
+      "accounts": [
+        {
+          "name": "offer",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "maker",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "tokenMint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rent",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "pricePerToken",
+          "type": "u64"
+        },
+        {
+          "name": "minAmount",
+          "type": "u64"
+        },
+        {
+          "name": "maxAmount",
+          "type": "u64"
+        },
+        {
+          "name": "offerType",
+          "type": {
+            "defined": "OfferType"
+          }
+        }
+      ]
+    },
+    {
+      "name": "updateOffer",
+      "accounts": [
+        {
+          "name": "offer",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "maker",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "pricePerToken",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "minAmount",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "maxAmount",
+          "type": {
+            "option": "u64"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pauseOffer",
+      "accounts": [
+        {
+          "name": "offer",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "maker",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "resumeOffer",
+      "accounts": [
+        {
+          "name": "offer",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "maker",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "closeOffer",
+      "accounts": [
+        {
+          "name": "offer",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "maker",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "takeOffer",
+      "accounts": [
+        {
+          "name": "offer",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "maker",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenMint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "trade",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "taker",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "tradeProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Offer",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "maker",
+            "type": "publicKey"
+          },
+          {
+            "name": "tokenMint",
+            "type": "publicKey"
+          },
+          {
+            "name": "pricePerToken",
+            "type": "u64"
+          },
+          {
+            "name": "minAmount",
+            "type": "u64"
+          },
+          {
+            "name": "maxAmount",
+            "type": "u64"
+          },
+          {
+            "name": "offerType",
+            "type": {
+              "defined": "OfferType"
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": "OfferStatus"
+            }
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
+          },
+          {
+            "name": "updatedAt",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "OfferStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Paused"
+          },
+          {
+            "name": "Closed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Buy"
+          },
+          {
+            "name": "Sell"
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidStatus",
+      "msg": "Invalid offer status for this operation"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidAmount",
+      "msg": "Amount is outside the allowed range"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidAmounts",
+      "msg": "Invalid amount configuration"
+    },
+    {
+      "code": 6003,
+      "name": "CalculationError",
+      "msg": "Error in price calculation"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidPrice",
+      "msg": "Price must be greater than zero"
+    },
+    {
+      "code": 6005,
+      "name": "InsufficientAmount",
+      "msg": "Insufficient amount available"
+    }
+  ],
+  "metadata": {
+    "address": "FSnCsffRYjRwbpzFCkbwSFtgfSNbxrpYUsq84opqG4wW"
+  }
+}

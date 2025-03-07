@@ -83,7 +83,7 @@ export async function mintTokens(
       authority,
       amount,
       [],
-      undefined,
+      { commitment: 'confirmed' },
       tokenProgramId
     );
   } catch (error) {

@@ -1,6 +1,7 @@
 import { Program, AnchorProvider, Idl } from '@project-serum/anchor';
 import { Connection, Keypair, PublicKey, SystemProgram } from '@solana/web3.js';
 import { Profile } from '../types';
+import { BN } from '@project-serum/anchor';
 
 export class ProfileClient {
   private program: Program;
@@ -117,18 +118,18 @@ export class ProfileClient {
 
   async getProfile(profilePDA: PublicKey): Promise<Profile> {
     const account = await this.program.account.profile.fetch(profilePDA);
-    const usernameBytes = account.username.slice(0, account.usernameLen);
+    const usernameBytes = (account.username as Uint8Array).slice(0, account.usernameLen as number);
     const username = Buffer.from(usernameBytes).toString('utf8');
 
     return {
-      owner: account.owner,
+      owner: account.owner as PublicKey,
       username,
-      reputationScore: account.reputationScore,
-      tradesCompleted: account.tradesCompleted,
-      tradesDisputed: account.tradesDisputed,
-      isVerified: account.isVerified,
-      createdAt: account.createdAt.toNumber(),
-      updatedAt: account.updatedAt.toNumber(),
+      reputationScore: account.reputationScore as number,
+      tradesCompleted: account.tradesCompleted as number,
+      tradesDisputed: account.tradesDisputed as number,
+      isVerified: account.isVerified as boolean,
+      createdAt: (account.createdAt as BN).toNumber(),
+      updatedAt: (account.updatedAt as BN).toNumber(),
     };
   }
 

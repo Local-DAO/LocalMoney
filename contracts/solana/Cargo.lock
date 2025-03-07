@@ -2756,7 +2756,6 @@ dependencies = [
  "solana-sdk",
  "spl-token",
  "tokio",
- "trade",
 ]
 
 [[package]]

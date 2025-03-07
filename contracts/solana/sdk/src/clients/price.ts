@@ -71,10 +71,10 @@ export class PriceClient {
   }> {
     const account = await this.program.account.priceState.fetch(oracle);
     return {
-      isInitialized: account.isInitialized,
-      admin: account.admin,
-      priceProvider: account.priceProvider,
-      prices: account.prices,
+      isInitialized: account.isInitialized as boolean,
+      admin: account.admin as PublicKey,
+      priceProvider: account.priceProvider as PublicKey,
+      prices: account.prices as CurrencyPrice[],
     };
   }
 } 

@@ -3,4 +3,5 @@ export * from './clients/trade';
 export * from './clients/offer';
 export * from './clients/profile';
 export * from './types';
-export * from './utils'; 
+export * from './utils';
+export * from './walletAdapter'; 

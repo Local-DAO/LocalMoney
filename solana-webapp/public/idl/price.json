@@ -1,0 +1,233 @@
+{
+  "version": "0.1.0",
+  "name": "price",
+  "instructions": [
+    {
+      "name": "initialize",
+      "accounts": [
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "admin",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "updatePrices",
+      "accounts": [
+        {
+          "name": "oracle",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "priceProvider",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "prices",
+          "type": {
+            "vec": {
+              "defined": "CurrencyPrice"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "registerPriceRoute",
+      "accounts": [
+        {
+          "name": "routeData",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "admin",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "denom",
+          "type": "string"
+        },
+        {
+          "name": "route",
+          "type": {
+            "vec": {
+              "defined": "PriceRoute"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "verifyPriceForTrade",
+      "accounts": [
+        {
+          "name": "oracle",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "tradePrice",
+          "type": "u64"
+        },
+        {
+          "name": "currency",
+          "type": "string"
+        },
+        {
+          "name": "toleranceBps",
+          "type": "u16"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "PriceState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "isInitialized",
+            "type": "bool"
+          },
+          {
+            "name": "admin",
+            "type": "publicKey"
+          },
+          {
+            "name": "priceProvider",
+            "type": "publicKey"
+          },
+          {
+            "name": "prices",
+            "type": {
+              "vec": {
+                "defined": "CurrencyPrice"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PriceRouteData",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "denom",
+            "type": "string"
+          },
+          {
+            "name": "route",
+            "type": {
+              "vec": {
+                "defined": "PriceRoute"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "CurrencyPrice",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "currency",
+            "type": "string"
+          },
+          {
+            "name": "usdPrice",
+            "type": "u64"
+          },
+          {
+            "name": "updatedAt",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PriceRoute",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offerAsset",
+            "type": "string"
+          },
+          {
+            "name": "pool",
+            "type": "publicKey"
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotInitialized",
+      "msg": "Price oracle is not initialized"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidPriceProvider",
+      "msg": "Invalid price provider"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidPriceRoute",
+      "msg": "Invalid price route configuration"
+    },
+    {
+      "code": 6003,
+      "name": "PriceNotFound",
+      "msg": "Price not found for the specified currency"
+    },
+    {
+      "code": 6004,
+      "name": "PriceOutOfRange",
+      "msg": "Trade price is outside allowed range"
+    }
+  ],
+  "metadata": {
+    "address": "BGuwRibtPCCLCo98AFDk6C3QUPS2VHBkTRyDgkCrySfG"
+  }
+}

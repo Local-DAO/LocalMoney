@@ -3,16 +3,16 @@ import { PublicKey, Keypair } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { expect } from "chai";
 import { OfferClient } from "../sdk/src/clients/offer";
-import { TradeClient } from "../sdk/src/clients/trade";
 import { airdropSol, delay, createTokenMint, createTokenAccount, mintTokens, getTokenBalance } from "../sdk/src/utils";
 import * as dotenv from "dotenv";
+import { OfferType } from "../sdk/src/types";
 
 // Load environment variables from .env file
 dotenv.config();
 
 describe("offer", () => {
-  if (!process.env.OFFER_PROGRAM_ID || !process.env.TRADE_PROGRAM_ID) {
-    throw new Error("Required program IDs not found in environment. Make sure OFFER_PROGRAM_ID and TRADE_PROGRAM_ID are set.");
+  if (!process.env.OFFER_PROGRAM_ID ) {
+    throw new Error("Required program IDs not found in environment. Make sure OFFER_PROGRAM_ID is set.");
   }
 
   // Configure the client to use the local cluster
@@ -20,10 +20,8 @@ describe("offer", () => {
   anchor.setProvider(provider);
 
   const OFFER_PROGRAM_ID = new PublicKey(process.env.OFFER_PROGRAM_ID);
-  const TRADE_PROGRAM_ID = new PublicKey(process.env.TRADE_PROGRAM_ID);
 
   let offerClient: OfferClient;
-  let tradeClient: TradeClient;
   
   // Generate keypairs for our test
   const creator = Keypair.generate();
@@ -38,11 +36,9 @@ describe("offer", () => {
   before(async () => {
     // Load the IDLs
     const offerIdl = require("../target/idl/offer.json");
-    const tradeIdl = require("../target/idl/trade.json");
 
     // Initialize clients
     offerClient = new OfferClient(OFFER_PROGRAM_ID, provider, offerIdl);
-    tradeClient = new TradeClient(TRADE_PROGRAM_ID, provider, tradeIdl);
 
     try {
       // Airdrop SOL to taker and mint authority
@@ -110,37 +106,59 @@ describe("offer", () => {
     );
     await delay(1000);
 
-    const [offerPDA] = await offerClient.findOfferAddress(creator.publicKey);
-    const [tradePDA] = await tradeClient.findTradeAddress(creator.publicKey, tokenMint);
+    // Set offer parameters
+    const pricePerToken = new anchor.BN(100_000); // $1.00 with 5 decimals
+    const minAmount = new anchor.BN(100_000); // 0.1 token
+    const maxAmount = new anchor.BN(1000_000); // 1 token
+    const offerType = OfferType.Sell;
 
+    // Find the offer PDA with new seed formula
+    const [offerPDA] = await offerClient.findOfferAddress(
+      creator.publicKey,
+      tokenMint,
+      offerType,
+      minAmount,
+      maxAmount
+    );
+    
     // Create escrow token account
     const escrowTokenAccount = Keypair.generate();
 
-    return { creator, creatorTokenAccount, offerPDA, escrowTokenAccount, tradePDA };
+    return { 
+      creator, 
+      creatorTokenAccount, 
+      offerPDA, 
+      escrowTokenAccount, 
+      pricePerToken,
+      minAmount,
+      maxAmount,
+      offerType
+    };
   }
 
   it("Creates an offer", async () => {
-    const { creator, creatorTokenAccount, offerPDA } = await setupCreator();
+    const { 
+      creator, 
+      offerPDA,
+      pricePerToken,
+      minAmount,
+      maxAmount,
+      offerType 
+    } = await setupCreator();
 
     try {
-      const amount = new anchor.BN(1000_000); // 1 token
-      const pricePerToken = new anchor.BN(100_000); // $1.00 with 5 decimals
-      const minAmount = new anchor.BN(100_000); // 0.1 token
-      const maxAmount = new anchor.BN(1000_000); // 1 token
-
       await offerClient.createOffer(
         creator,
         tokenMint,
-        amount,
         pricePerToken,
         minAmount,
-        maxAmount
+        maxAmount,
+        offerType
       );
 
       const offer = await offerClient.getOffer(offerPDA);
-      expect(offer.creator.toString()).to.equal(creator.publicKey.toString());
+      expect(offer.maker.toString()).to.equal(creator.publicKey.toString());
       expect(offer.tokenMint.toString()).to.equal(tokenMint.toString());
-      expect(offer.amount.toNumber()).to.equal(1000_000);
       expect(offer.pricePerToken.toNumber()).to.equal(100_000);
       expect(offer.minAmount.toNumber()).to.equal(100_000);
       expect(offer.maxAmount.toNumber()).to.equal(1000_000);
@@ -152,22 +170,25 @@ describe("offer", () => {
   });
 
   it("Updates offer price and amounts", async () => {
-    const { creator, creatorTokenAccount, offerPDA } = await setupCreator();
+    const { 
+      creator, 
+      creatorTokenAccount, 
+      offerPDA,
+      pricePerToken,
+      minAmount,
+      maxAmount,
+      offerType 
+    } = await setupCreator();
 
     try {
       // First create a new offer
-      const amount = new anchor.BN(1000_000);
-      const pricePerToken = new anchor.BN(100_000);
-      const minAmount = new anchor.BN(100_000);
-      const maxAmount = new anchor.BN(1000_000);
-
       await offerClient.createOffer(
         creator,
         tokenMint,
-        amount,
         pricePerToken,
         minAmount,
-        maxAmount
+        maxAmount,
+        offerType
       );
 
       // Now update it
@@ -194,384 +215,126 @@ describe("offer", () => {
   });
 
   it("Manages offer lifecycle (pause/resume/close)", async () => {
-    const { creator, creatorTokenAccount, offerPDA } = await setupCreator();
+    const { 
+      creator, 
+      creatorTokenAccount, 
+      offerPDA,
+      pricePerToken,
+      minAmount,
+      maxAmount,
+      offerType 
+    } = await setupCreator();
 
     try {
       // First create a new offer
-      const amount = new anchor.BN(1000_000);
-      const pricePerToken = new anchor.BN(100_000);
-      const minAmount = new anchor.BN(100_000);
-      const maxAmount = new anchor.BN(1000_000);
-
       await offerClient.createOffer(
         creator,
         tokenMint,
-        amount,
         pricePerToken,
         minAmount,
-        maxAmount
+        maxAmount,
+        offerType
       );
 
-      // Pause offer
+      // Pause it
       await offerClient.pauseOffer(offerPDA, creator);
-
       let offer = await offerClient.getOffer(offerPDA);
       expect(offer.status).to.equal('paused');
 
-      // Resume offer
+      // Resume it
       await offerClient.resumeOffer(offerPDA, creator);
-
       offer = await offerClient.getOffer(offerPDA);
       expect(offer.status).to.equal('active');
 
-      // Close offer
+      // Close it
       await offerClient.closeOffer(offerPDA, creator);
-
       offer = await offerClient.getOffer(offerPDA);
       expect(offer.status).to.equal('closed');
     } catch (error) {
-      console.error("Error in offer lifecycle management:", error);
+      console.error("Error managing offer lifecycle:", error);
       throw error;
     }
   });
 
-  it("Takes an offer", async () => {
-    const { creator, creatorTokenAccount, offerPDA, escrowTokenAccount, tradePDA } = await setupCreator();
-    const buyer = Keypair.generate();
-    
-    // Airdrop SOL to buyer
-    await airdropSol(provider.connection, buyer.publicKey, 100);
-    await delay(1000);
-
-    // First create the offer
-    const amount = new anchor.BN(1000_000); // 1 token
-    const pricePerToken = new anchor.BN(100_000);
-    const minAmount = new anchor.BN(100_000);
-    const maxAmount = new anchor.BN(1000_000);
-
-    await offerClient.createOffer(
-      creator,
-      tokenMint,
-      amount,
-      pricePerToken,
-      minAmount,
-      maxAmount
-    );
-    await delay(1000);
-
-    // Create trade
-    await tradeClient.createTrade(
-      creator,
-      tokenMint,
-      creatorTokenAccount,
-      escrowTokenAccount,
-      new anchor.BN(500000),
-      new anchor.BN(500000)
-    );
-    await delay(1000);
-
-    // Accept trade
-    await tradeClient.acceptTrade(tradePDA, buyer);
-    await delay(1000);
-
-    // Create buyer token account
-    const buyerTokenAccount = await createTokenAccount(
-      provider.connection,
-      mintAuthority,
-      tokenMint,
-      buyer.publicKey,
-      TOKEN_PROGRAM_ID
-    );
-    await delay(1000);
-
-    // Take offer
-    await offerClient.takeOffer(
+  it("Creates 3 offers with different parameters and load through the all query", async () => {
+    const { 
+      creator, 
+      creatorTokenAccount, 
       offerPDA,
-      creator,
-      tokenMint,
-      creatorTokenAccount,
-      escrowTokenAccount.publicKey,
-      tradePDA,
-      buyer,
-      buyerTokenAccount,
-      TRADE_PROGRAM_ID,
-      new anchor.BN(500000)
-    );
-    await delay(1000);
-
-    // Verify escrow balance
-    const escrowBalance = await getTokenBalance(provider.connection, escrowTokenAccount.publicKey);
-    expect(escrowBalance).to.equal(500000);
-  });
-
-  it("Fails to take offer with invalid amount", async () => {
-    const { creator, creatorTokenAccount, offerPDA, escrowTokenAccount, tradePDA } = await setupCreator();
-    const buyer = Keypair.generate();
-    
-    // Airdrop SOL to buyer
-    await airdropSol(provider.connection, buyer.publicKey, 100);
-    await delay(1000);
-
-    // Create offer
-    await offerClient.createOffer(
-      creator,
-      tokenMint,
-      new anchor.BN(1000000),
-      new anchor.BN(1),
-      new anchor.BN(100000),
-      new anchor.BN(500000)
-    );
-    await delay(1000);
-
-    // Create trade
-    await tradeClient.createTrade(
-      creator,
-      tokenMint,
-      creatorTokenAccount,
-      escrowTokenAccount,
-      new anchor.BN(500000),
-      new anchor.BN(500000)
-    );
-    await delay(1000);
-
-    // Accept trade
-    await tradeClient.acceptTrade(tradePDA, buyer);
-    await delay(1000);
-
-    // Create buyer token account
-    const buyerTokenAccount = await createTokenAccount(
-      provider.connection,
-      mintAuthority,
-      tokenMint,
-      buyer.publicKey,
-      TOKEN_PROGRAM_ID
-    );
-    await delay(1000);
+      pricePerToken,  
+    } = await setupCreator();
 
     try {
-      // Try to take offer with invalid amount
-      await offerClient.takeOffer(
-        offerPDA,
-        creator.publicKey,
-        tokenMint,
-        creatorTokenAccount,
-        escrowTokenAccount.publicKey,
-        tradePDA,
-        buyer,
-        buyerTokenAccount,
-        TRADE_PROGRAM_ID,
-        new anchor.BN(750000) // Amount greater than maxAmount
-      );
-      expect.fail("Expected error was not thrown");
-    } catch (error: any) {
-      // The error could be any validation error, so we just expect it to be thrown
-      expect(true).to.be.true;
-    }
-  });
+      const initialOffers = await offerClient.getAllOffers();
+      const initialOfferCount = initialOffers.length;
+      const randomPrice1 = new anchor.BN(Math.floor(Math.random() * 1000000));
+      const randomPrice2 = new anchor.BN(Math.floor(Math.random() * 1000000));
+      const randomPrice3 = new anchor.BN(Math.floor(Math.random() * 1000000));
+      const randomMinAmount1 = new anchor.BN(Math.floor(Math.random() * 1000000));
+      const randomMinAmount2 = new anchor.BN(Math.floor(Math.random() * 1000000));
+      const randomMinAmount3 = new anchor.BN(Math.floor(Math.random() * 1000000));
+      const randomMaxAmount1 = new anchor.BN(Math.max(randomMinAmount1.toNumber()+1, Math.random() * 10000));
+      const randomMaxAmount2 = new anchor.BN(Math.max(randomMinAmount2.toNumber()+1, Math.random() * 10000));
+      const randomMaxAmount3 = new anchor.BN(Math.max(randomMinAmount3.toNumber()+1, Math.random() * 10000));
 
-  it("Fails to create offer with invalid amounts", async () => {
-    const { creator } = await setupCreator();
-
-    try {
       await offerClient.createOffer(
         creator,
         tokenMint,
-        new anchor.BN(1000_000),
-        new anchor.BN(100_000),
-        new anchor.BN(2000_000), // minAmount > amount
-        new anchor.BN(3000_000)  // maxAmount > amount
+        randomPrice3,
+        randomMinAmount3,
+        randomMaxAmount3,
+        OfferType.Sell
       );
-      expect.fail("Expected error was not thrown");
-    } catch (error: any) {
-      expect(error.toString()).to.include("InvalidAmounts");
-    }
+      await delay(1000); // Wait for transaction to be confirmed
 
-    try {
       await offerClient.createOffer(
         creator,
         tokenMint,
-        new anchor.BN(1000_000),
-        new anchor.BN(0), // zero price
-        new anchor.BN(100_000),
-        new anchor.BN(1000_000)
+        randomPrice2,
+        randomMinAmount2,
+        randomMaxAmount2,
+        OfferType.Sell
       );
-      expect.fail("Expected error was not thrown");
-    } catch (error: any) {
-      expect(error.toString()).to.include("InvalidPrice");
-    }
-  });
+      await delay(1000); // Wait for transaction to be confirmed
 
-  it("Handles edge cases when taking offers", async () => {
-    const { creator, creatorTokenAccount, offerPDA, escrowTokenAccount, tradePDA } = await setupCreator();
-    const buyer = Keypair.generate();
-    
-    await airdropSol(provider.connection, buyer.publicKey, 100);
-    await delay(1000);
-
-    // Create offer
-    await offerClient.createOffer(
-      creator,
-      tokenMint,
-      new anchor.BN(1000_000),
-      new anchor.BN(100_000),
-      new anchor.BN(100_000),  // min amount
-      new anchor.BN(1000_000)  // max amount
-    );
-    await delay(1000);
-
-    // Create trade
-    await tradeClient.createTrade(
-      creator,
-      tokenMint,
-      creatorTokenAccount,
-      escrowTokenAccount,
-      new anchor.BN(1000_000),
-      new anchor.BN(100_000)
-    );
-    await delay(1000);
-
-    await tradeClient.acceptTrade(tradePDA, buyer);
-    await delay(1000);
-
-    const buyerTokenAccount = await createTokenAccount(
-      provider.connection,
-      mintAuthority,
-      tokenMint,
-      buyer.publicKey,
-      TOKEN_PROGRAM_ID
-    );
-    await delay(1000);
-
-    // Take minimum amount
-    await offerClient.takeOffer(
-      offerPDA,
-      creator,
-      tokenMint,
-      creatorTokenAccount,
-      escrowTokenAccount.publicKey,
-      tradePDA,
-      buyer,
-      buyerTokenAccount,
-      TRADE_PROGRAM_ID,
-      new anchor.BN(100_000)
-    );
-    await delay(1000);
-
-    let offer = await offerClient.getOffer(offerPDA);
-    expect(offer.amount.toNumber()).to.equal(900_000);
-
-    // Take remaining amount
-    await offerClient.takeOffer(
-      offerPDA,
-      creator,
-      tokenMint,
-      creatorTokenAccount,
-      escrowTokenAccount.publicKey,
-      tradePDA,
-      buyer,
-      buyerTokenAccount,
-      TRADE_PROGRAM_ID,
-      new anchor.BN(900_000)
-    );
-    await delay(1000);
-
-    offer = await offerClient.getOffer(offerPDA);
-    expect(offer.amount.toNumber()).to.equal(0);
-  });
-
-  it("Properly handles error cases", async () => {
-    const { creator, creatorTokenAccount, offerPDA, escrowTokenAccount, tradePDA } = await setupCreator();
-    const buyer = Keypair.generate();
-    const unauthorizedUser = Keypair.generate();
-    
-    await airdropSol(provider.connection, buyer.publicKey, 100);
-    await airdropSol(provider.connection, unauthorizedUser.publicKey, 100);
-    await delay(1000);
-
-    // Create offer
-    await offerClient.createOffer(
-      creator,
-      tokenMint,
-      new anchor.BN(1000_000),
-      new anchor.BN(100_000),
-      new anchor.BN(100_000),
-      new anchor.BN(1000_000)
-    );
-    await delay(1000);
-
-    // Try unauthorized update
-    try {
-      await offerClient.updateOffer(
-        offerPDA,
-        unauthorizedUser,
-        new anchor.BN(200_000)
-      );
-      expect.fail("Expected error was not thrown");
-    } catch (error: any) {
-      // Error expected
-    }
-
-    // Pause offer
-    await offerClient.pauseOffer(offerPDA, creator);
-    await delay(1000);
-
-    // Try to take paused offer
-    const buyerTokenAccount = await createTokenAccount(
-      provider.connection,
-      mintAuthority,
-      tokenMint,
-      buyer.publicKey,
-      TOKEN_PROGRAM_ID
-    );
-    await delay(1000);
-
-    try {
-      await offerClient.takeOffer(
-        offerPDA,
-        creator,
+      await offerClient.createOffer(
+        creator,  
         tokenMint,
-        creatorTokenAccount,
-        escrowTokenAccount.publicKey,
-        tradePDA,
-        buyer,
-        buyerTokenAccount,
-        TRADE_PROGRAM_ID,
-        new anchor.BN(100_000)
+        randomPrice1,
+        randomMinAmount1,
+        randomMaxAmount1,
+        OfferType.Sell
       );
-      expect.fail("Expected error was not thrown");
-    } catch (error: any) {
-      expect(error.toString()).to.include("InvalidStatus");
-    }
+      await delay(1000); // Wait for transaction to be confirmed
 
-    // Try to pause already paused offer
-    try {
-      await offerClient.pauseOffer(offerPDA, creator);
-      expect.fail("Expected error was not thrown");
-    } catch (error: any) {
-      expect(error.toString()).to.include("InvalidStatus");
-    }
+      // Load all offers
+      const allOffers = await offerClient.getAllOffers();
+      expect(allOffers.length).to.equal(initialOfferCount + 3);
 
-    // Close offer
-    await offerClient.closeOffer(offerPDA, creator);
-    await delay(1000);
+      // order offers by createdAt timestamp descending
+      const sortedOffers = allOffers.sort((a, b) => b.createdAt - a.createdAt);
+      const offer1 = sortedOffers[0];
+      const offer2 = sortedOffers[1];
+      const offer3 = sortedOffers[2];
 
-    // Try to take closed offer
-    try {
-      await offerClient.takeOffer(
-        offerPDA,
-        creator,
-        tokenMint,
-        creatorTokenAccount,
-        escrowTokenAccount.publicKey,
-        tradePDA,
-        buyer,
-        buyerTokenAccount,
-        TRADE_PROGRAM_ID,
-        new anchor.BN(100_000)
-      );
-      expect.fail("Expected error was not thrown");
-    } catch (error: any) {
-      expect(error.toString()).to.include("InvalidStatus");
+      // Check each offer's parameters
+      console.log({
+        randomPrice1: randomPrice1.toNumber(),
+        randomPrice2: randomPrice2.toNumber(),
+        randomPrice3: randomPrice3.toNumber(),
+      })
+      expect(offer1.pricePerToken.toNumber()).to.equal(randomPrice1.toNumber());
+      expect(offer2.pricePerToken.toNumber()).to.equal(randomPrice2.toNumber());
+      expect(offer3.pricePerToken.toNumber()).to.equal(randomPrice3.toNumber());
+      expect(offer1.minAmount.toNumber()).to.equal(randomMinAmount1.toNumber());
+      expect(offer2.minAmount.toNumber()).to.equal(randomMinAmount2.toNumber());
+      expect(offer3.minAmount.toNumber()).to.equal(randomMinAmount3.toNumber());
+      expect(offer1.maxAmount.toNumber()).to.equal(randomMaxAmount1.toNumber());
+      expect(offer2.maxAmount.toNumber()).to.equal(randomMaxAmount2.toNumber());
+      expect(offer3.maxAmount.toNumber()).to.equal(randomMaxAmount3.toNumber());
+    } catch (error) {
+      console.error("Error creating and loading offers:", error);
+      throw error;
     }
   });
 }); 

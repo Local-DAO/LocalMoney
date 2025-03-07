@@ -1,0 +1,8 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Outer circle -->
+  <circle cx="24" cy="24" r="22" stroke="#FF6B2C" stroke-width="4" fill="none" />
+  
+  <!-- Inner elements - simplified representation of the logo in the screenshot -->
+  <circle cx="24" cy="24" r="14" fill="#FF6B2C" fill-opacity="0.2" />
+  <path d="M24 10C16.268 10 10 16.268 10 24C10 31.732 16.268 38 24 38C31.732 38 38 31.732 38 24" stroke="#FF6B2C" stroke-width="3" stroke-linecap="round" />
+</svg> 
