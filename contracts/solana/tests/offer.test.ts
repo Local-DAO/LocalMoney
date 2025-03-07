@@ -267,54 +267,71 @@ describe("offer", () => {
     try {
       const initialOffers = await offerClient.getAllOffers();
       const initialOfferCount = initialOffers.length;
+      const randomPrice1 = new anchor.BN(Math.floor(Math.random() * 1000000));
+      const randomPrice2 = new anchor.BN(Math.floor(Math.random() * 1000000));
+      const randomPrice3 = new anchor.BN(Math.floor(Math.random() * 1000000));
+      const randomMinAmount1 = new anchor.BN(Math.floor(Math.random() * 1000000));
+      const randomMinAmount2 = new anchor.BN(Math.floor(Math.random() * 1000000));
+      const randomMinAmount3 = new anchor.BN(Math.floor(Math.random() * 1000000));
+      const randomMaxAmount1 = new anchor.BN(Math.max(randomMinAmount1.toNumber()+1, Math.random() * 10000));
+      const randomMaxAmount2 = new anchor.BN(Math.max(randomMinAmount2.toNumber()+1, Math.random() * 10000));
+      const randomMaxAmount3 = new anchor.BN(Math.max(randomMinAmount3.toNumber()+1, Math.random() * 10000));
 
       await offerClient.createOffer(
         creator,
         tokenMint,
-        new anchor.BN(100_000), // $1.00
-        new anchor.BN(100_000), // 0.1 token
-        new anchor.BN(1000_000), // 1 token
+        randomPrice3,
+        randomMinAmount3,
+        randomMaxAmount3,
         OfferType.Sell
       );
-      await delay(333); // Wait for transaction to be confirmed
+      await delay(1000); // Wait for transaction to be confirmed
 
       await offerClient.createOffer(
         creator,
         tokenMint,
-        new anchor.BN(110_000), // $1.10
-        new anchor.BN(200_000), // 0.2 token
-        new anchor.BN(900_000), // 0.9 token
+        randomPrice2,
+        randomMinAmount2,
+        randomMaxAmount2,
         OfferType.Sell
       );
-      await delay(333); // Wait for transaction to be confirmed
+      await delay(1000); // Wait for transaction to be confirmed
 
       await offerClient.createOffer(
         creator,  
         tokenMint,
-        new anchor.BN(120_000), // $1.20
-        new anchor.BN(300_000), // 0.3 token
-        new anchor.BN(800_000), // 0.8 token
+        randomPrice1,
+        randomMinAmount1,
+        randomMaxAmount1,
         OfferType.Sell
       );
-      await delay(333); // Wait for transaction to be confirmed
+      await delay(1000); // Wait for transaction to be confirmed
 
       // Load all offers
       const allOffers = await offerClient.getAllOffers();
       expect(allOffers.length).to.equal(initialOfferCount + 3);
-      const offer1 = allOffers[initialOfferCount];
-      const offer2 = allOffers[initialOfferCount + 1];
-      const offer3 = allOffers[initialOfferCount + 2];
+
+      // order offers by createdAt timestamp descending
+      const sortedOffers = allOffers.sort((a, b) => b.createdAt - a.createdAt);
+      const offer1 = sortedOffers[0];
+      const offer2 = sortedOffers[1];
+      const offer3 = sortedOffers[2];
 
       // Check each offer's parameters
-      expect(offer1.pricePerToken.toNumber()).to.equal(100_000);
-      expect(offer1.minAmount.toNumber()).to.equal(100_000);
-      expect(offer1.maxAmount.toNumber()).to.equal(1000_000);
-      expect(offer2.pricePerToken.toNumber()).to.equal(110_000);
-      expect(offer2.minAmount.toNumber()).to.equal(200_000);
-      expect(offer2.maxAmount.toNumber()).to.equal(900_000);
-      expect(offer3.pricePerToken.toNumber()).to.equal(120_000);
-      expect(offer3.minAmount.toNumber()).to.equal(300_000);
-      expect(offer3.maxAmount.toNumber()).to.equal(800_000);
+      console.log({
+        randomPrice1: randomPrice1.toNumber(),
+        randomPrice2: randomPrice2.toNumber(),
+        randomPrice3: randomPrice3.toNumber(),
+      })
+      expect(offer1.pricePerToken.toNumber()).to.equal(randomPrice1.toNumber());
+      expect(offer2.pricePerToken.toNumber()).to.equal(randomPrice2.toNumber());
+      expect(offer3.pricePerToken.toNumber()).to.equal(randomPrice3.toNumber());
+      expect(offer1.minAmount.toNumber()).to.equal(randomMinAmount1.toNumber());
+      expect(offer2.minAmount.toNumber()).to.equal(randomMinAmount2.toNumber());
+      expect(offer3.minAmount.toNumber()).to.equal(randomMinAmount3.toNumber());
+      expect(offer1.maxAmount.toNumber()).to.equal(randomMaxAmount1.toNumber());
+      expect(offer2.maxAmount.toNumber()).to.equal(randomMaxAmount2.toNumber());
+      expect(offer3.maxAmount.toNumber()).to.equal(randomMaxAmount3.toNumber());
     } catch (error) {
       console.error("Error creating and loading offers:", error);
       throw error;
