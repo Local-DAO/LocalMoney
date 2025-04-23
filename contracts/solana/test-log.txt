@@ -1,0 +1,95 @@
+🛑 Attempting to stop any running local validator...
+🚀 Starting LocalMoney test process for suite: full-lifecycle...
+📋 Checking Solana version...
+solana-cli 2.1.21 (src:8a085eeb; feat:1416569292, client:Agave)
+📋 Checking Anchor version...
+anchor-cli 0.31.1
+🧹 Cleaning up previous validator instances (redundant check)...
+🔄 Starting Solana local validator in the background...
+⏳ Waiting for validator to start...
+✅ Validator started.
+🔍 Verifying validator is responsive...
+2.1.21
+✅ Local validator running with PID 82025
+⚙️ Configuring Solana to use localhost...
+Config File: /root/.config/solana/cli/config.yml
+RPC URL: http://localhost:8899 
+WebSocket URL: ws://localhost:8900/ (computed)
+Keypair Path: /root/.config/solana/id.json 
+Commitment: confirmed 
+⚓ Anchor environment variables set:
+ANCHOR_PROVIDER_URL: http://localhost:8899
+ANCHOR_WALLET: /root/.config/solana/id.json
+Validator was just started by this script. Forcing build and deploy.
+🔨 Building programs...
+📦 Deploying programs to local validator...
+Deploying cluster: http://0.0.0.0:8899
+Upgrade authority: /root/.config/solana/id.json
+Deploying program "hub"...
+Program path: /root/workspace/localdao/LocalMoney/contracts/solana/target/deploy/hub.so...
+Program Id: 3dF7ebo6DErpveMLxGAg6KTkTanGYLHmVXvqTWkqhpmL
+
+Signature: 2i2nWquJxQxoCusDrmK8LSfGcC9BCy772UE89gp9F7WZTzi2CUXj4X9LhMUZ9gG6aVvwmoUerVLDzed6i1yXLQin
+
+Deploying program "offer"...
+Program path: /root/workspace/localdao/LocalMoney/contracts/solana/target/deploy/offer.so...
+Program Id: 8V7KPa396tMUbU1HpuGGWAWMddfsuQ5K5vLMnxdAurFv
+
+Signature: fdm4ZpocwbFeqtrV4xAeiyxp7diDcTyusmgibRa5y9iLwe2RtMFV6z55wRv14puwLnaaPqMy1aHzG2aH9psaSkb
+
+Deploying program "trade"...
+Program path: /root/workspace/localdao/LocalMoney/contracts/solana/target/deploy/trade.so...
+Program Id: c4zS4D2VUbXrp48rUVWTSuFbJf9iSdd4Qn2aJSyBpXN
+
+Signature: UPgaxtKdjbdN4rQnY6jE7h5PHxHaezEPiXNEEfFZC4VxSJXQAkBVNX1SJxLMn6tx77v2a9HnLoGtrvtQDMZKeY4
+
+Deploying program "price"...
+Program path: /root/workspace/localdao/LocalMoney/contracts/solana/target/deploy/price.so...
+Program Id: HpUVnehKAfNRzC12m9EYwhwjMwbWKTbcaCwPpwVGoNrC
+
+Signature: 3XC8BJ7jJjKT4jVM3EY22Zu8BEh8v5Tj9uM6L7aRmvi3rDrx2drmqs1bXsbMAGdCYYDMZ5J3U5UgUzhBwYqF6U98
+
+Deploying program "profile"...
+Program path: /root/workspace/localdao/LocalMoney/contracts/solana/target/deploy/profile.so...
+Program Id: HNKH412Fsfe8vdBudCnsbmB9PwYxcxYfktfmyTWgiKbd
+
+Signature: 4ETWZNyZMzBY9s5PmafHDGmj55p5TFMmrYeoGmxZYGZgzhf7VMU93mzHw1QzAFKL3NM8ApC8igWPknN8Q64FFSg1
+
+Deploy success
+✅ Programs built and deployed successfully!
+🔍 Verifying program deployment on validator...
+Checking hub program (3dF7ebo6DErpveMLxGAg6KTkTanGYLHmVXvqTWkqhpmL)... ✓ Found
+Checking offer program (8V7KPa396tMUbU1HpuGGWAWMddfsuQ5K5vLMnxdAurFv)... ✓ Found
+Checking trade program (c4zS4D2VUbXrp48rUVWTSuFbJf9iSdd4Qn2aJSyBpXN)... ✓ Found
+Checking price program (HpUVnehKAfNRzC12m9EYwhwjMwbWKTbcaCwPpwVGoNrC)... ✓ Found
+Checking profile program (HNKH412Fsfe8vdBudCnsbmB9PwYxcxYfktfmyTWgiKbd)... ✓ Found
+✅ All programs verified as deployed!
+🛠️ Setting up test environment and running tests: full-lifecycle
+Cleared previous test log file: test-ledger/test-output.log
+⚙️ Running tests (output to test-ledger/test-output.log)...
+
+> localmoney-solana@0.1.0 setup-test-env:no-build
+> ts-node scripts/setup-test-env.ts --no-build
+
+Setting up LocalMoney test environment...
+✅ Local validator is running
+Generated test keypairs:
+Admin: Hbity7MAXurc4kKq45WwqGbPqFyBENBGeo4GBTpGvg3i
+Maker: 7FNWPzsYEEABaagK4VPWfaeqwJFntiW85pkahmoTTpUB
+Taker: 2n2aJQx5cv8gCtYCeaW3EQgcM4kupD1qzRHkS68JBGQx
+Arbitrator: 8tUSy8Hqj92kXCEjF3EHNB3QSBCbbuaR9c4q7iLzF8Gr
+
+Airdropping SOL to test accounts...
+✅ Airdropped 100 SOL to Admin
+✅ Airdropped 100 SOL to Maker
+✅ Airdropped 100 SOL to Taker
+✅ Airdropped 100 SOL to Arbitrator
+
+⏩ Skipping build and deploy as requested with --no-build flag
+   Make sure programs have been built and deployed previously!
+
+Initializing hub configuration...
+Hub initialization should be done via the integration tests
+
+✅ Test environment setup complete!
+You can now run 'npm run test:integration' to run the integration tests

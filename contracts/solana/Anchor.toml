@@ -1,43 +1,37 @@
 [toolchain]
-anchor_version = "0.29.0"
+anchor_version = "0.31.1"
 
 [features]
-seeds = false
+resolution = true
 skip-lint = false
 
 [programs.localnet]
-offer = "52CejgfZEeefMzvYqJ7RmcT4NzemCDZf4nsX3kywuw2B"
-price = "8uzArQW1YiLwh2CLQhMU1Ya774EMEbdbpgux6Tf8z1rn"
-profile = "BG73i544YBJXTQaHVqCcTo94pnwvMw4euWhk5V9UvQxK"
-trade = "437aWt9WrLYquEwJsVe3B3kANP77ZCvn4gs4hJBNLefG"
-
-[programs.mainnet]
-offer = "52CejgfZEeefMzvYqJ7RmcT4NzemCDZf4nsX3kywuw2B"
-price = "8uzArQW1YiLwh2CLQhMU1Ya774EMEbdbpgux6Tf8z1rn"
-profile = "BG73i544YBJXTQaHVqCcTo94pnwvMw4euWhk5V9UvQxK"
-trade = "437aWt9WrLYquEwJsVe3B3kANP77ZCvn4gs4hJBNLefG"
+hub = "3dF7ebo6DErpveMLxGAg6KTkTanGYLHmVXvqTWkqhpmL"
+offer = "8V7KPa396tMUbU1HpuGGWAWMddfsuQ5K5vLMnxdAurFv"
+price = "HpUVnehKAfNRzC12m9EYwhwjMwbWKTbcaCwPpwVGoNrC"
+profile = "HNKH412Fsfe8vdBudCnsbmB9PwYxcxYfktfmyTWgiKbd"
+trade = "c4zS4D2VUbXrp48rUVWTSuFbJf9iSdd4Qn2aJSyBpXN"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
-wallet = "target/deploy/test-keypair.json"
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
 
 [workspace]
-members = ["programs/price", "programs/offer", "programs/trade", "programs/profile"]
-types = "target/types"
+members = ["programs/hub", "programs/offer", "programs/trade", "programs/price", "programs/profile"]
 
 [scripts]
-test = "cd tests && pnpm test:offer"
+test = "ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
 
 [test]
-startup_wait = 10000
+startup_wait = 0
 shutdown_wait = 2000
 upgradeable = false
 
 [test.validator]
 bind_address = "0.0.0.0"
-url = "http://127.0.0.1:8899"
+url = "http://localhost:8899"
 ledger = ".anchor/test-ledger"
 rpc_port = 8899

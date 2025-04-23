@@ -1,4 +1,5 @@
 .idea
+.cursor/
 .vscode
 .vscode/
 **/.vscode/
@@ -10,4 +11,4 @@ artifacts/
 codeIds.json
 /contracts/schema/
 test-ledger/
-
+venv/

@@ -1,23 +1,24 @@
 [workspace]
-resolver = "2"
 members = [
-    "programs/*",
-    "common"
+  "programs/hub",
+  "programs/offer",
+  "programs/trade",
+  "programs/price",
+  "programs/profile",
+  "programs/shared",
 ]
+resolver = "2"
 
-[workspace.dependencies]
-borsh = "0.10.3"
-thiserror = "1.0"
-borsh-derive = "0.10.3"
-num-derive = "0.4"
-num-traits = "0.2"
+# Force cargo to use older lockfile version
+[workspace.metadata]
+version-control = { lockfile-version = "3" }
 
 [profile.release]
 overflow-checks = true
-lto = "fat"
-codegen-units = 1
+lto = false
+codegen-units = 16
 
 [profile.release.build-override]
 opt-level = 3
 incremental = false
-codegen-units = 1
+codegen-units = 16 
