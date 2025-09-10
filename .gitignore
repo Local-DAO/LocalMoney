@@ -13,7 +13,7 @@ test-ledger/
 *.log
 examples/*
 .claude/
-PRPs/
+# PRPs/
 
 # Security - Never commit private keys or keypairs
 *keypair.json

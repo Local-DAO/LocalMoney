@@ -5,10 +5,10 @@ async function deployAllContractsWithRoles() {
     
     // Deploy mock tokens
     const MockERC20 = await ethers.getContractFactory("MockERC20");
-    const mockToken = await MockERC20.deploy("Test Token", "TEST");
+    const mockToken = await MockERC20.deploy("Test Token", "TEST", 18);
     await mockToken.waitForDeployment();
     
-    const localToken = await MockERC20.deploy("Local Token", "LOCAL");
+    const localToken = await MockERC20.deploy("Local Token", "LOCAL", 18);
     await localToken.waitForDeployment();
     
     // Create hub configuration
@@ -59,7 +59,7 @@ async function deployAllContractsWithRoles() {
     
     // Deploy Offer
     const Offer = await ethers.getContractFactory("Offer");
-    const offer = await upgrades.deployProxy(Offer, [await hub.getAddress(), await profile.getAddress()], {
+    const offer = await upgrades.deployProxy(Offer, [await hub.getAddress()], {
         initializer: "initialize",
         kind: "uups"
     });
@@ -68,7 +68,7 @@ async function deployAllContractsWithRoles() {
     // Deploy PriceOracle
     const PriceOracle = await ethers.getContractFactory("PriceOracle");
     const priceOracle = await upgrades.deployProxy(PriceOracle, 
-        [await hub.getAddress(), ethers.ZeroAddress], {
+        [admin.address, ethers.ZeroAddress, 3600], { // admin, swapRouter, maxPriceAge (1 hour)
         initializer: "initialize",
         kind: "uups"
     });
