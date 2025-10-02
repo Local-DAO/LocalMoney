@@ -6,11 +6,19 @@ import generateSitemap from 'vite-ssg-sitemap'
 import Layouts from 'vite-plugin-vue-layouts'
 import Components from 'unplugin-vue-components/vite'
 import AutoImport from 'unplugin-auto-import/vite'
-import VueI18n from '@intlify/vite-plugin-vue-i18n'
+import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import Inspect from 'vite-plugin-inspect'
 import EnvironmentPlugin from 'vite-plugin-environment'
 
 export default defineConfig({
+  css: {
+    preprocessorOptions: {
+      scss: {
+        api: 'modern-compiler',
+        silenceDeprecations: ['import', 'legacy-js-api', 'mixed-decls']
+      }
+    }
+  },
   resolve: {
     alias: {
       '~/': `${path.resolve(__dirname, 'src')}/`,
@@ -18,6 +26,10 @@ export default defineConfig({
   },
   define: {
     'process.env': { BROWSER: true },
+  },
+  esbuild: {
+    target: 'esnext',
+    keepNames: true,
   },
   plugins: [
     EnvironmentPlugin('all', { prefix: '' }),
@@ -44,7 +56,7 @@ export default defineConfig({
       dts: 'src/components.d.ts',
     }),
     // https://github.com/intlify/bundle-tools/tree/main/packages/vite-plugin-vue-i18n
-    VueI18n({
+    VueI18nPlugin({
       runtimeOnly: true,
       compositionOnly: true,
       include: [path.resolve(__dirname, 'locales/**')],
@@ -57,6 +69,10 @@ export default defineConfig({
   ssgOptions: {
     script: 'async',
     formatting: 'minify',
+    includedRoutes(paths) {
+      // Exclude the bridge route from SSG as it requires browser APIs
+      return paths.filter(i => !i.includes('/bridge'))
+    },
     onFinished() {
       generateSitemap()
     },

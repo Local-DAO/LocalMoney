@@ -20,15 +20,15 @@ const emit = defineEmits<{
     @update:modelValue="emit('update:modelValue', $event)"
   >
     <template #selected-option>
-      <div class="wrap" v-bind="(info = getSelectInfo(options, modelValue))">
-        <img v-if="info.icon" :src="info.icon" />
-        <p>{{ info.display }}</p>
+      <div class="wrap" v-if="getSelectInfo(options, modelValue)">
+        <img v-if="getSelectInfo(options, modelValue)?.icon" :src="getSelectInfo(options, modelValue)?.icon" />
+        <p>{{ getSelectInfo(options, modelValue)?.display }}</p>
       </div>
     </template>
     <template #option="{ label }">
-      <div class="wrap" v-bind="(info = getSelectInfo(options, label))">
-        <img v-if="info.icon" :src="info.icon" />
-        <p>{{ info.display }}</p>
+      <div class="wrap" v-if="getSelectInfo(options, label)">
+        <img v-if="getSelectInfo(options, label)?.icon" :src="getSelectInfo(options, label)?.icon" />
+        <p>{{ getSelectInfo(options, label)?.display }}</p>
       </div>
     </template>
   </v-select>

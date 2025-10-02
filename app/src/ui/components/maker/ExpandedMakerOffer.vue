@@ -10,7 +10,7 @@ import {
   removeTelegramHandlePrefix,
   scrollToElement,
 } from '~/shared'
-import { OfferType } from '~/types/components.interface'
+import { OfferType, LoadingState } from '~/types/components.interface'
 import type { OfferResponse } from '~/types/components.interface'
 import { useClientStore } from '~/stores/client'
 import { denomToValue, microDenomToDisplay, microDenomToIcon } from '~/utils/denom'
@@ -63,26 +63,34 @@ const cryptoPlaceholder = computed(
       '0'
     ).toFixed(2)}`
 )
-const minAmountInCrypto = computed(
-  () => parseInt(props.offerResponse.offer.min_amount.toString()) / CRYPTO_DECIMAL_PLACES
-)
-const maxAmountInCrypto = computed(
-  () => parseInt(props.offerResponse.offer.max_amount.toString()) / CRYPTO_DECIMAL_PLACES
-)
-const maxAmountInFiat = computed(() =>
-  parseFloat(
-    (fiatPriceByRate.value * (parseInt(props.offerResponse.offer.max_amount.toString()) / FIAT_DECIMAL_PLACES)).toFixed(
-      2
-    )
-  )
-)
-const minAmountInFiat = computed(() =>
-  parseFloat(
-    (fiatPriceByRate.value * (parseInt(props.offerResponse.offer.min_amount.toString()) / FIAT_DECIMAL_PLACES)).toFixed(
-      2
-    )
-  )
-)
+const minAmountInCrypto = computed(() => {
+  // Amounts are normalized to micro-units (1e6) across chains
+  const decimalPlaces = CRYPTO_DECIMAL_PLACES
+  // Use Number() to handle large numbers properly - BigInt loses decimal precision in division
+  const amount = Number(props.offerResponse.offer.min_amount)
+  return amount / decimalPlaces
+})
+const maxAmountInCrypto = computed(() => {
+  // Amounts are normalized to micro-units (1e6) across chains
+  const decimalPlaces = CRYPTO_DECIMAL_PLACES
+  // Use Number() to handle large numbers properly - BigInt loses decimal precision in division
+  const amount = Number(props.offerResponse.offer.max_amount)
+  return amount / decimalPlaces
+})
+const maxAmountInFiat = computed(() => {
+  // Amounts are normalized to micro-units (1e6) across chains
+  const decimalPlaces = CRYPTO_DECIMAL_PLACES
+  const tokens = Number(props.offerResponse.offer.max_amount) / decimalPlaces
+  const unitPrice = fiatPriceByRate.value / 100 // cents -> fiat units
+  return parseFloat((tokens * unitPrice).toFixed(2))
+})
+const minAmountInFiat = computed(() => {
+  // Amounts are normalized to micro-units (1e6) across chains
+  const decimalPlaces = CRYPTO_DECIMAL_PLACES
+  const tokens = Number(props.offerResponse.offer.min_amount) / decimalPlaces
+  const unitPrice = fiatPriceByRate.value / 100 // cents -> fiat units
+  return parseFloat((tokens * unitPrice).toFixed(2))
+})
 const offerPrice = computed(
   () => `${props.offerResponse.offer.fiat_currency} ${formatAmount(fiatPriceByRate.value / 100, false)}`
 )
@@ -100,12 +108,37 @@ const minMaxFiatStr = computed(() => {
 })
 const minMaxCryptoStr = computed(() => {
   const symbol = microDenomToDisplay(denomToValue(props.offerResponse.offer.denom), client.chainClient)
-  const min = formatAmount(parseInt(props.offerResponse.offer.min_amount), true, 6)
-  const max = formatAmount(parseInt(props.offerResponse.offer.max_amount), true, 6)
+  // Use the already computed min/max values that have correct decimal places
+  const min = minAmountInCrypto.value.toFixed(6)
+  const max = maxAmountInCrypto.value.toFixed(6)
   return [`${symbol} ${parseFloat(min)}`, `${symbol} ${parseFloat(max)}`]
 })
 
 async function newTrade() {
+  // Check if wallet is connected first
+  if (!client.userWallet.isConnected) {
+    // Show a message prompting to connect wallet
+    client.loadingState = LoadingState.show('Please connect your wallet to open a trade')
+    
+    // Prompt wallet connection
+    try {
+      await client.connectWallet()
+      
+      // If wallet connection was successful, dismiss the loading state and continue
+      client.loadingState = LoadingState.dismiss()
+      
+      // Check if now connected
+      if (!client.userWallet.isConnected) {
+        // User cancelled wallet connection
+        return
+      }
+    } catch (error) {
+      console.error('Failed to connect wallet:', error)
+      client.loadingState = LoadingState.dismiss()
+      return
+    }
+  }
+  
   const telegramHandle = removeTelegramHandlePrefix(telegram.value) as string
   await client.openTrade(props.offerResponse, telegramHandle, cryptoAmount.value)
 }
@@ -188,10 +221,19 @@ function focusCrypto() {
 }
 
 onMounted(async () => {
-  const denomFiatPrice = client.fiatPrices
-    .get(props.offerResponse.offer.fiat_currency)
-    ?.get(denomToValue(props.offerResponse.offer.denom))
-  const price = calculateFiatPriceByRate(denomFiatPrice, props.offerResponse.offer.rate)
+  // First, ensure we have the fiat price for this denom
+  const offer = props.offerResponse.offer
+  let denomFiatPrice = client.fiatPrices
+    .get(offer.fiat_currency)
+    ?.get(denomToValue(offer.denom))
+  
+  // If price is not cached, fetch it
+  if (!denomFiatPrice) {
+    const priceResponse = await client.fetchFiatPriceForDenom(offer.fiat_currency, offer.denom)
+    denomFiatPrice = priceResponse.price
+  }
+  
+  const price = calculateFiatPriceByRate(denomFiatPrice, offer.rate)
   fiatPriceByRate.value = price
   startExchangeRateRefreshTimer()
   telegram.value = await defaultUserContact()
@@ -200,7 +242,7 @@ onMounted(async () => {
   })
 })
 
-const tradeCountIcon = computed(() => props.offerResponse.profile.released_trades_count > 0)
+const tradeCountIcon = computed(() => props.offerResponse.profile?.released_trades_count > 0)
 
 onUnmounted(() => {
   clearInterval(refreshRateInterval)
@@ -311,7 +353,13 @@ onUnmounted(() => {
       </div>
       <div class="wrap-btns">
         <button class="secondary" @click="emit('cancel')">cancel</button>
-        <button class="primary bg-gray300" :disabled="!valid" @click="newTrade()">open trade</button>
+        <button 
+          class="primary bg-gray300" 
+          :disabled="!valid && client.userWallet.isConnected" 
+          @click="newTrade()"
+        >
+          {{ !client.userWallet.isConnected ? 'connect wallet to trade' : 'open trade' }}
+        </button>
       </div>
     </footer>
   </div>

@@ -91,11 +91,11 @@ pub fn assert_value_in_range(
 ) -> Result<(), ContractError> {
     //Check that amount is inside Offer limits
     if amount > max || amount < min {
-        return Err(ContractError::InvalidOfferAmount {
+        Err(ContractError::InvalidOfferAmount {
             amount,
             min_amount: min,
             max_amount: max,
-        });
+        })
     } else {
         Ok(())
     }
@@ -134,8 +134,8 @@ pub fn assert_trade_state_and_type(
 }
 
 pub fn assert_offer_description_valid(description: Option<String>) -> Result<(), ContractError> {
-    let description = description.unwrap_or(String::new());
-    return if description.len() > OFFER_DESCRIPTION_LIMIT {
+    let description = description.unwrap_or_default();
+    if description.len() > OFFER_DESCRIPTION_LIMIT {
         let mut message = "The description can not be longer than ".to_string();
         message.push_str(OFFER_DESCRIPTION_LIMIT.to_string().as_str());
         message.push_str(" characters.");
@@ -146,7 +146,7 @@ pub fn assert_offer_description_valid(description: Option<String>) -> Result<(),
         })
     } else {
         Ok(())
-    };
+    }
 }
 
 pub fn assert_migration_parameters(
@@ -165,8 +165,7 @@ pub fn assert_migration_parameters(
 
     if previous_version >= contract_version {
         let message = format!(
-            "The new version of the contract ({}) must be greater than the previous one ({}).",
-            contract_version, previous_version
+            "The new version of the contract ({contract_version}) must be greater than the previous one ({previous_version})."
         );
         return Err(ContractError::InvalidParameter {
             parameter: "CONTRACT_VERSION".to_string(),

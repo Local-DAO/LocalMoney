@@ -11,17 +11,31 @@ const emit = defineEmits<{ (e: 'select'): void }>()
 const client = useClientStore()
 
 const marginRate = computed(() => convertOfferRateToMarginRate(props.offer.rate))
+// Use appropriate decimal places based on chain type (EVM uses 18 decimals, Cosmos uses 6)
+// Amounts are normalized to micro-units (1e6) across chains
+const decimalPlaces = computed(() => 1000000)
+const minAmountDisplay = computed(() => {
+  const amount = Number(props.offer.min_amount) / decimalPlaces.value
+  return amount.toFixed(6)
+})
+const maxAmountDisplay = computed(() => {
+  const amount = Number(props.offer.max_amount) / decimalPlaces.value
+  return amount.toFixed(6)
+})
 const offerPrice = computed(() => {
-  const denomFiatPrice = client.getFiatPrice(props.offer.fiat_currency, props.offer.denom)
+  const baseFiatPrice = client.getFiatPrice(props.offer.fiat_currency, props.offer.denom)
+  
+  // If no price is available (0), show price unavailable
+  if (baseFiatPrice === 0) {
+    return `${props.offer.fiat_currency} -`
+  }
+  
   return `${props.offer.fiat_currency} ${formatAmount(
-    calculateFiatPriceByRate(denomFiatPrice, props.offer.rate),
+    calculateFiatPriceByRate(baseFiatPrice * 100, props.offer.rate) / 100,
     false
   )}`
 })
 
-onBeforeMount(async () => {
-  await client.updateFiatPrice(props.offer.fiat_currency, props.offer.denom)
-})
 </script>
 
 <template>
@@ -40,8 +54,8 @@ onBeforeMount(async () => {
         <div class="wrap">
           <p class="label">Limits</p>
           <p class="limit">
-            {{ formatAmount(offer.min_amount, true, 6) }} -
-            {{ formatAmount(offer.max_amount, true, 6) }}
+            {{ parseFloat(minAmountDisplay) }} -
+            {{ parseFloat(maxAmountDisplay) }}
             {{ microDenomToDisplay(offer.denom.native, client.chainClient) }}
           </p>
         </div>

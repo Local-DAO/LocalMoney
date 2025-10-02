@@ -1,10 +1,7 @@
-use std::ops::{Div, Mul};
-
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
-    Uint128, Uint256,
+    to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128, Uint256,
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::Denom;
@@ -15,8 +12,7 @@ use localmoney_protocol::errors::ContractError::HubAlreadyRegistered;
 use localmoney_protocol::guards::{assert_migration_parameters, assert_ownership};
 use localmoney_protocol::hub_utils::{get_hub_admin, get_hub_config, register_hub_internal};
 use localmoney_protocol::price::{
-    AssetInfo, CurrencyPrice, DenomFiatPrice, ExecuteMsg, NativeToken, OfferAsset, PriceRoute,
-    QueryMsg, Simulation, SimulationResponseData, SwapSimulation, DENOM_PRICE_ROUTE, FIAT_PRICE,
+    CurrencyPrice, DenomFiatPrice, ExecuteMsg, PriceRoute, QueryMsg, DENOM_PRICE_ROUTE, FIAT_PRICE,
 };
 use localmoney_protocol::profile::{InstantiateMsg, MigrateMsg};
 
@@ -58,6 +54,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::Price { fiat, denom } => {
             to_json_binary(&query_fiat_price_for_denom(deps, fiat, denom)?)
         }
+        QueryMsg::GetFiatPrice { currency } => to_json_binary(&query_fiat_price(deps, &currency)?),
     }
 }
 
@@ -117,68 +114,88 @@ pub fn register_price_route_for_denom(
     Ok(res)
 }
 
-//TODO: temporarily will work only for LUNA
 pub fn query_fiat_price_for_denom(
     deps: Deps,
     fiat: FiatCurrency,
     denom: Denom,
 ) -> StdResult<DenomFiatPrice> {
-    //TODO: Move "uluna" to a cfg field.
-    let uluna = "uluna";
-    let luna_price_route = DENOM_PRICE_ROUTE.load(deps.storage, &uluna);
-    let luna_price_route = match luna_price_route {
-        Ok(route) => {
-            let route = route.get(0).unwrap().clone();
-            if route.offer_asset != denom {
-                return Err(StdError::generic_err("Unsupported denom."));
-            }
-            route
-        }
-        Err(_e) => return Err(StdError::generic_err("No price route for LUNA")),
-    };
-
-    // Query the price of LUNA in USDC
-    let one = "1000000";
-    let denom_price_result: SimulationResponseData = deps
-        .querier
-        .query_wasm_smart(
-            &luna_price_route.pool.clone(),
-            &SwapSimulation {
-                simulation: Simulation {
-                    offer_asset: OfferAsset {
-                        info: AssetInfo {
-                            native_token: NativeToken {
-                                denom: denom_to_string(&luna_price_route.offer_asset),
-                            },
-                        },
-                        amount: one.to_string(),
-                    },
-                },
-            },
-        )
-        .unwrap();
-    let luna_usdc_price = Uint256::from(denom_price_result.return_amount.u128());
-    // If fiat is USD, we don't need to query the price
-    let fiat_price = match fiat {
-        FiatCurrency::USD => CurrencyPrice {
-            currency: FiatCurrency::USD,
-            usd_price: Uint128::new(100u128),
-            updated_at: 0,
-        },
-        _ => FIAT_PRICE.load(deps.storage, fiat.to_string().as_str())?,
-    };
-
-    // Calculate the price of the denom in fiat
-    let fiat_usd = Uint256::from(fiat_price.usd_price);
-    let decimal_places = 1_000_000u128;
-    let denom_fiat_price = fiat_usd
-        .mul(&luna_usdc_price)
-        .div(Uint256::from(decimal_places));
+    // TODO: Workaround while we don't implement IBC Queries.
+    // We can only support stablecoins for now, assuming they're pegged.
+    let fiat_price = query_fiat_price(deps, &fiat)?;
     Ok(DenomFiatPrice {
         denom,
         fiat,
-        price: denom_fiat_price,
+        price: Uint256::from_uint128(fiat_price.usd_price),
     })
+    // // Get the denom string to query the price route
+    // let denom_str = denom_to_string(&denom);
+    // let price_route = DENOM_PRICE_ROUTE.load(deps.storage, &denom_str);
+    // let price_route = match price_route {
+    //     Ok(route) => {
+    //         if route.is_empty() {
+    //             return Err(StdError::generic_err(format!("No price route configured for {}", denom_str)));
+    //         }
+    //         route.get(0).unwrap().clone()
+    //     }
+    //     Err(_e) => return Err(StdError::generic_err(format!("No price route for {}", denom_str))),
+    // };
+
+    // // Query the price of denom in USDC
+    // let one = "1000000";
+    // let denom_price_result: SimulationResponseData = deps
+    //     .querier
+    //     .query_wasm_smart(
+    //         &price_route.pool.clone(),
+    //         &SwapSimulation {
+    //             simulation: Simulation {
+    //                 offer_asset: OfferAsset {
+    //                     info: AssetInfo {
+    //                         native_token: NativeToken {
+    //                             denom: denom_to_string(&price_route.offer_asset),
+    //                         },
+    //                     },
+    //                     amount: one.to_string(),
+    //                 },
+    //             },
+    //         },
+    //     )
+    //     .unwrap();
+    // let denom_usdc_price = Uint256::from(denom_price_result.return_amount.u128());
+    // // If fiat is USD, we don't need to query the price
+    // let fiat_price = match fiat {
+    //     FiatCurrency::USD => CurrencyPrice {
+    //         currency: FiatCurrency::USD,
+    //         usd_price: Uint128::new(100u128),
+    //         updated_at: 0,
+    //     },
+    //     _ => FIAT_PRICE.load(deps.storage, fiat.to_string().as_str())?,
+    // };
+
+    // // Calculate the price of the denom in fiat
+    // let fiat_usd = Uint256::from(fiat_price.usd_price);
+    // let decimal_places = 1_000_000u128;
+    // let denom_fiat_price = fiat_usd
+    //     .mul(&denom_usdc_price)
+    //     .div(Uint256::from(decimal_places));
+    // Ok(DenomFiatPrice {
+    //     denom,
+    //     fiat,
+    //     price: denom_fiat_price,
+    // })
+}
+
+pub fn query_fiat_price(deps: Deps, currency: &FiatCurrency) -> StdResult<CurrencyPrice> {
+    // For USD, return a fixed rate
+    if *currency == FiatCurrency::USD {
+        return Ok(CurrencyPrice {
+            currency: FiatCurrency::USD,
+            usd_price: Uint128::new(100u128), // 100 cents = 1 USD
+            updated_at: 0,
+        });
+    }
+
+    // For other currencies, load from storage
+    FIAT_PRICE.load(deps.storage, currency.to_string().as_str())
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]

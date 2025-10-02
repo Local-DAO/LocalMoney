@@ -4,39 +4,61 @@ import type { GetOffer, PatchOffer, PostOffer, Trade } from '~/types/components.
 import { denomToValue, microDenomToDisplay } from '~/utils/denom'
 import { CRYPTO_DECIMAL_PLACES } from '~/utils/constants'
 import type { ChainClient } from '~/network/Chain'
+import { chainFactory } from '~/network/Chain'
 
 const TRADE = 'trade'
 
+let isInitialized = false
+
 export function initAnalytics(token: string, config?: Partial<Config>) {
-  mixpanel.init(token, config)
+  if (token && token.trim() !== '') {
+    mixpanel.init(token, config)
+    isInitialized = true
+  }
 }
 
 export function trackPage(page: Page, data?: AppData) {
-  mixpanel.track(page, data)
+  if (isInitialized) {
+    mixpanel.track(page, data)
+  }
 }
 
-export function trackWalletConnection(events: WalletEvents, address?: string) {
-  if (address) {
-    mixpanel.identify(address)
+export function trackWalletConnection(events: WalletEvents, data?: string | Record<string, any>) {
+  if (isInitialized) {
+    if (typeof data === 'string') {
+      // Legacy support: if data is a string, treat it as address for connected/disconnected events
+      mixpanel.identify(data)
+      mixpanel.track(events)
+    } else {
+      // New: support data object for wallet/chain selection events
+      mixpanel.track(events, data)
+    }
   }
-  mixpanel.track(events)
 }
 
 export function trackOffer(event: OfferEvents, offer: OfferData) {
-  mixpanel.track(event, offer)
+  if (isInitialized) {
+    mixpanel.track(event, offer)
+  }
 }
 
 export function trackTrade(event: TradeEvents, trade: TradeData) {
-  mixpanel.track(event, trade)
-  mixpanel.track(TRADE, trade)
+  if (isInitialized) {
+    mixpanel.track(event, trade)
+    mixpanel.track(TRADE, trade)
+  }
 }
 
 export function trackSocialLinks(event: ClickLinkEvents) {
-  mixpanel.track(event)
+  if (isInitialized) {
+    mixpanel.track(event)
+  }
 }
 
 export function trackAppEvents(event: AppEvents, data?: AppData) {
-  mixpanel.track(event, data)
+  if (isInitialized) {
+    mixpanel.track(event, data)
+  }
 }
 
 export enum Page {
@@ -83,10 +105,14 @@ export function toTradeData(trade: Trade, offer: GetOffer, chainClient: ChainCli
     trade_taker = trade.buyer
   }
 
+  // Amounts are normalized to micro-units (1e6) across chains
+  const client = chainFactory(chainClient)
+  const decimalPlaces = CRYPTO_DECIMAL_PLACES
+
   return {
     trade_id: trade.id,
     offer_id: trade.offer_id,
-    trade_amount: Number(trade.amount) / CRYPTO_DECIMAL_PLACES,
+    trade_amount: Number(trade.amount) / decimalPlaces,
     trade_denom: microDenomToDisplay(denomToValue(trade.denom), chainClient),
     trade_type: offer.offer_type,
     trade_state: trade.state,
@@ -113,11 +139,15 @@ export interface OfferData {
 }
 
 export function toOfferData(offerId: number, offer: PostOffer | PatchOffer, chainClient: ChainClient): OfferData {
+  // Amounts are normalized to micro-units (1e6) across chains
+  const client = chainFactory(chainClient)
+  const decimalPlaces = CRYPTO_DECIMAL_PLACES
+  
   const offer_denom = 'denom' in offer ? microDenomToDisplay(denomToValue(offer.denom), chainClient) : undefined
   return {
     offer_id: offerId,
-    offer_max: Number(offer.max_amount) / CRYPTO_DECIMAL_PLACES,
-    offer_min: Number(offer.min_amount) / CRYPTO_DECIMAL_PLACES,
+    offer_max: Number(offer.max_amount) / decimalPlaces,
+    offer_min: Number(offer.min_amount) / decimalPlaces,
     offer_rate: offer.rate,
     offer_state: (offer as PatchOffer).state ?? null,
     offer_type: (offer as PostOffer).offer_type ?? null,
@@ -129,10 +159,11 @@ export function toOfferData(offerId: number, offer: PostOffer | PatchOffer, chai
 export enum WalletEvents {
   connected = 'wallet_connected',
   disconnected = 'wallet_disconnected',
+  select_wallet = 'wallet_selected',
+  select_chain = 'chain_selected',
 }
 
 export enum ClickLinkEvents {
-  discord = 'link_discord',
   twitter = 'link_twitter',
   github = 'link_github',
   litepaper = 'link_litepaper',

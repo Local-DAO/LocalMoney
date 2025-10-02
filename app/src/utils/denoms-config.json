@@ -21,12 +21,34 @@
   },
   "kujira_testnet": {
     "untrn": {
-      "icon": "/tokens/kuji.png",
-      "display": "KUJI"
+      "display": "KUJI",
+      "icon": "/tokens/kuji.png"
     },
     "factory/kujira1ltvwg69sw3c5z99c6rr08hal7v0kdzfxz07yj5/demo": {
       "display": "DEMO",
       "icon": "/tokens/kuji.png"
+    }
+  },
+  "mantra_dukong": {
+    "usdc": {
+      "display": "USDC",
+      "icon": "/tokens/usdc.svg"
+    }
+  },
+  "cosmos_hub": {
+    "ibc/F663521BF1836B00F5F177680F74BFB9A8B5654A694D0D2BC249E03CF2509013": {
+      "display":"USDC",
+      "icon": "/tokens/usdc.svg"
+    }
+  },
+  "bsc": {
+    "usdt": {
+      "display": "USDT",
+      "icon": "/tokens/usdt.png"
+    },
+    "usdc": {
+      "display": "USDC",
+      "icon": "/tokens/usdc.png"
     }
   }
 }

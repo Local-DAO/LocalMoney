@@ -85,17 +85,30 @@ export interface PostOffer {
   description?: string
 }
 
-export enum FiatCurrency {
-  USD = 'USD',
-  ARS = 'ARS',
-  BRL = 'BRL',
-  CLP = 'CLP',
-  COP = 'COP',
-  EUR = 'EUR',
-  GBP = 'GBP',
-  MXN = 'MXN',
-  VES = 'VES',
-}
+export const FiatCurrency = {
+  USD: 'USD',
+  ARS: 'ARS',
+  BRL: 'BRL',
+  CAD: 'CAD',
+  CLP: 'CLP',
+  COP: 'COP',
+  EUR: 'EUR',
+  GBP: 'GBP',
+  MXN: 'MXN',
+  NGN: 'NGN',
+  THB: 'THB',
+  VES: 'VES',
+  IDR: 'IDR',
+  PHP: 'PHP',
+  VND: 'VND',
+  MYR: 'MYR',
+  SGD: 'SGD',
+  ZAR: 'ZAR',
+  EGP: 'EGP',
+  KES: 'KES',
+} as const
+
+export type FiatCurrency = typeof FiatCurrency[keyof typeof FiatCurrency]
 
 export function isFiatCurrency(fiat: string): boolean {
   return Object.values(FiatCurrency).includes(fiat as FiatCurrency)
@@ -121,6 +134,7 @@ export enum OfferOrder {
 export interface NewTrade {
   offer_id: number
   amount: string
+  price?: string
   taker: string
   profile_taker_contact: string
   profile_taker_encryption_key: string
@@ -231,6 +245,7 @@ export interface Arbitrator {
 
 export interface DenomFiatPrice {
   denom: Denom
-  fiat: FiatCurrency
-  price: number
+  fiat?: FiatCurrency
+  price: number | string
+  success?: boolean
 }

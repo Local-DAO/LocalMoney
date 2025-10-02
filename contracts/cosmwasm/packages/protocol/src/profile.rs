@@ -154,7 +154,7 @@ pub struct ProfileModel<'a> {
 impl ProfileModel<'_> {
     pub fn store<'a>(storage: &'a mut dyn Storage, profile: &Profile) -> ProfileModel<'a> {
         profiles()
-            .save(storage, profile.addr.to_string(), &profile)
+            .save(storage, profile.addr.to_string(), profile)
             .unwrap();
         ProfileModel {
             profile: profile.clone(),
@@ -193,7 +193,7 @@ impl ProfileModel<'_> {
             .owner
             .range(deps.storage, None, None, Order::Descending)
             .take(limit as usize)
-            .flat_map(|item| item.and_then(|(_, profile)| Ok(profile)))
+            .flat_map(|item| item.map(|(_, profile)| profile))
             .collect();
         Ok(result)
     }

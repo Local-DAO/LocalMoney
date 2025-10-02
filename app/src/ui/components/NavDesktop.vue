@@ -12,6 +12,18 @@ const enableMyOffersNav = computed(() => enableMyOffers(userWallet.value))
 <template>
   <nav>
     <ul>
+      <li class="item">
+        <router-link to="/dashboard">
+          <svg class="icon-24" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="7" height="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <rect x="14" y="3" width="7" height="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <rect x="14" y="14" width="7" height="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <rect x="3" y="14" width="7" height="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <p>Dashboard</p>
+        </router-link>
+      </li>
+
       <li v-if="enableMyOffersNav" class="item">
         <router-link to="/offers">
           <svg class="icon-24" viewBox="0 0 24 24" fill="none">

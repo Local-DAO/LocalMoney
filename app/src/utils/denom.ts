@@ -3,14 +3,20 @@ import type { SelectInfo } from '~/utils/select-utils'
 import type { CW20, Denom, Native } from '~/types/components.interface'
 import { ChainClient } from '~/network/Chain'
 
-export function denomsAvailable(chainClient: ChainClient): Map<string, MicronDenom> {
+export function denomsAvailable(chainClient: ChainClient): Map<string, MicroDenom> {
   switch (chainClient) {
     case ChainClient.kujiraMainnet:
-      return new Map<string, MicronDenom>(Object.entries(denomList.kujira_mainnet))
+      return new Map<string, MicroDenom>(Object.entries(denomList.kujira_mainnet))
     case ChainClient.terra:
-      return new Map<string, MicronDenom>(Object.entries(denomList.terra))
+      return new Map<string, MicroDenom>(Object.entries(denomList.terra))
+    case ChainClient.mantra:
+      return new Map<string, MicroDenom>(Object.entries(denomList.mantra_dukong))
+    case ChainClient.cosmoshub:
+      return new Map<string, MicroDenom>(Object.entries(denomList.cosmos_hub))
+    case ChainClient.bscMainnet:
+      return new Map<string, MicroDenom>(Object.entries(denomList.bsc))
     default:
-      return new Map<string, MicronDenom>(Object.entries(denomList.kujira_testnet))
+      return new Map<string, MicroDenom>(Object.entries(denomList.kujira_testnet))
   }
 }
 
@@ -50,7 +56,7 @@ export function denomToValue(denom: Denom): string {
   return (denom as Native).native ?? (denom as CW20).cw20
 }
 
-interface MicronDenom extends SelectInfo {
+interface MicroDenom extends SelectInfo {
   display: string
   icon: string
 }

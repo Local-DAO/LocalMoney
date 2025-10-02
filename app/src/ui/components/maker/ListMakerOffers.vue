@@ -48,16 +48,10 @@ function unselectOffer(offerItem: ExpandableItem<OfferResponse>) {
   offerItem.isExpanded = false
 }
 
-async function updateFiatPrice() {
-  // const denom: Denom = { native: selectedDenom.value }
-  // await client.updateFiatPrice(selectedFiat.value, denom)
-}
-
 onBeforeMount(async () => {})
 
 onMounted(async () => {
   await client.fetchMakerOffers(props.maker)
-  await updateFiatPrice()
 })
 </script>
 

@@ -14,8 +14,8 @@ const client = useClientStore()
 const secrets = computed(() => client.getSecrets())
 const profile = computed(() => client.profile)
 
-const isBuyer = computed(() => props.tradeInfo.trade.buyer === props.walletAddress)
-const isSeller = computed(() => props.tradeInfo.trade.seller === props.walletAddress)
+const isBuyer = computed(() => props.tradeInfo.trade.buyer?.toLowerCase() === props.walletAddress?.toLowerCase())
+const isSeller = computed(() => props.tradeInfo.trade.seller?.toLowerCase() === props.walletAddress?.toLowerCase())
 
 const timeToEnableDispute = computed(() => {
   const currentTime = Date.now()
@@ -35,6 +35,16 @@ const lastTradeState = computed(() => {
   return props.tradeInfo.trade.state_history[lastIndex].state
 })
 
+const isTradeExpired = computed(() => {
+  const currentTime = Date.now()
+  const expiresAt = (props.tradeInfo.trade.expires_at ?? 0) * 1000
+  return expiresAt > 0 && currentTime > expiresAt
+})
+
+const isEVM = computed(() => {
+  return client.chainClient.includes('BSC') || client.chainClient.includes('ETH') || client.chainClient.includes('POLYGON')
+})
+
 function getMaker(): string {
   return props.tradeInfo.offer.offer.owner
 }
@@ -45,10 +55,28 @@ function getTaker(): string {
 }
 
 async function acceptTradeRequest(id: number) {
-  const takerPubKey = props.tradeInfo.trade.seller_encryption_key
-  const decryptedContact = await decryptData(secrets.value.privateKey, profile.value.contact!)
-  const ownerContact = await encryptData(takerPubKey, decryptedContact)
-  await client.acceptTradeRequest(id, ownerContact)
+  try {
+    // Check if we're on an EVM chain (encryption not yet implemented for EVM)
+    const isEVM = client.chainClient.includes('BSC') || client.chainClient.includes('ETH') || client.chainClient.includes('POLYGON')
+    
+    if (isEVM) {
+      // For EVM chains, skip encryption for now
+      await client.acceptTradeRequest(id, '')
+    } else {
+      // For Cosmos chains, use encryption
+      const takerPubKey = props.tradeInfo.trade.seller_encryption_key
+      if (!takerPubKey) {
+        throw new Error('Seller does not have an encryption key')
+      }
+      
+      const decryptedContact = await decryptData(secrets.value.privateKey, profile.value.contact!)
+      const ownerContact = await encryptData(takerPubKey, decryptedContact)
+      await client.acceptTradeRequest(id, ownerContact)
+    }
+  } catch (e) {
+    console.error('Failed to accept trade request:', e)
+    throw new Error('Failed to accept trade request. Please check your encryption keys and try again.')
+  }
 }
 
 async function cancelTradeRequest(id: number) {
@@ -56,10 +84,32 @@ async function cancelTradeRequest(id: number) {
 }
 
 async function fundEscrow(tradeInfo: TradeInfo) {
-  const buyerPubKey = props.tradeInfo.trade.buyer_encryption_key!
-  const decryptedContact = await decryptData(secrets.value.privateKey, profile.value.contact!)
-  const ownerContact = await encryptData(buyerPubKey, decryptedContact)
-  await client.fundEscrow(tradeInfo, ownerContact)
+  try {
+    // Check if we're on an EVM chain (encryption not yet implemented for EVM)
+    const isEVM = client.chainClient.includes('BSC') || client.chainClient.includes('ETH') || client.chainClient.includes('POLYGON')
+    
+    if (isEVM) {
+      // For EVM chains, skip encryption for now
+      await client.fundEscrow(tradeInfo, '')
+    } else {
+      // For Cosmos chains, use encryption
+      const buyerPubKey = props.tradeInfo.trade.buyer_encryption_key
+      if (!buyerPubKey) {
+        throw new Error('Buyer does not have an encryption key')
+      }
+      
+      const decryptedContact = await decryptData(secrets.value.privateKey, profile.value.contact!)
+      const ownerContact = await encryptData(buyerPubKey, decryptedContact)
+      await client.fundEscrow(tradeInfo, ownerContact)
+    }
+  } catch (e: any) {
+    console.error('Failed to fund escrow:', e)
+    // Pass through specific error messages for balance issues
+    if (e?.message?.includes('Insufficient') || e?.message?.includes('balance')) {
+      throw e
+    }
+    throw new Error('Failed to fund escrow. Please check your encryption keys and try again.')
+  }
 }
 
 async function setFiatDeposited(id: number) {
@@ -75,19 +125,59 @@ async function refundEscrow(id: number) {
 }
 
 async function openDispute(id: number) {
-  let buyerContact = ''
-  let sellerContact = ''
-  const userDecryptedContact = await decryptData(secrets.value.privateKey, profile.value.contact!)
-  if (isBuyer.value) {
-    const sellerDecryptedContact = await decryptData(secrets.value.privateKey, props.tradeInfo.trade.seller_contact!)
-    buyerContact = await encryptData(props.tradeInfo.trade.arbitrator_encryption_key, userDecryptedContact)
-    sellerContact = await encryptData(props.tradeInfo.trade.arbitrator_encryption_key, sellerDecryptedContact)
-  } else {
-    const buyerDecryptedContact = await decryptData(secrets.value.privateKey, props.tradeInfo.trade.buyer_contact!)
-    sellerContact = await encryptData(props.tradeInfo.trade.arbitrator_encryption_key, userDecryptedContact)
-    buyerContact = await encryptData(props.tradeInfo.trade.arbitrator_encryption_key, buyerDecryptedContact)
+  try {
+    // Check if we're on an EVM chain (encryption not yet implemented for EVM)
+    const isEVM = client.chainClient.includes('BSC') || client.chainClient.includes('ETH') || client.chainClient.includes('POLYGON')
+    
+    if (isEVM) {
+      // For EVM chains, use plaintext contacts for now
+      const buyerContact = props.tradeInfo.trade.buyer_contact || ''
+      const sellerContact = props.tradeInfo.trade.seller_contact || ''
+      await client.openDispute(id, buyerContact, sellerContact)
+    } else {
+      // For Cosmos chains, use encryption
+      let buyerContact = ''
+      let sellerContact = ''
+      
+      // Decrypt user's own contact
+      const userDecryptedContact = await decryptData(secrets.value.privateKey, profile.value.contact!)
+      
+      if (isBuyer.value) {
+        // Decrypt seller's contact
+        const sellerDecryptedContact = await decryptData(secrets.value.privateKey, props.tradeInfo.trade.seller_contact!)
+        
+        // Encrypt both contacts for arbitrator
+        if (props.tradeInfo.trade.arbitrator_encryption_key) {
+          buyerContact = await encryptData(props.tradeInfo.trade.arbitrator_encryption_key, userDecryptedContact)
+          sellerContact = await encryptData(props.tradeInfo.trade.arbitrator_encryption_key, sellerDecryptedContact)
+        } else {
+          // Fallback to plaintext if no arbitrator encryption key
+          console.warn('No arbitrator encryption key, using plaintext contacts')
+          buyerContact = userDecryptedContact
+          sellerContact = sellerDecryptedContact
+        }
+      } else {
+        // Decrypt buyer's contact
+        const buyerDecryptedContact = await decryptData(secrets.value.privateKey, props.tradeInfo.trade.buyer_contact!)
+        
+        // Encrypt both contacts for arbitrator
+        if (props.tradeInfo.trade.arbitrator_encryption_key) {
+          sellerContact = await encryptData(props.tradeInfo.trade.arbitrator_encryption_key, userDecryptedContact)
+          buyerContact = await encryptData(props.tradeInfo.trade.arbitrator_encryption_key, buyerDecryptedContact)
+        } else {
+          // Fallback to plaintext if no arbitrator encryption key
+          console.warn('No arbitrator encryption key, using plaintext contacts')
+          sellerContact = userDecryptedContact
+          buyerContact = buyerDecryptedContact
+        }
+      }
+      
+      await client.openDispute(id, buyerContact, sellerContact)
+    }
+  } catch (e) {
+    console.error('Failed to open dispute:', e)
+    throw new Error('Failed to open dispute. Please check your encryption keys and try again.')
   }
-  await client.openDispute(id, buyerContact, sellerContact)
 }
 
 async function settleDispute(winner: string) {
@@ -148,7 +238,15 @@ async function settleDispute(winner: string) {
         message="Trade finished successfully"
       />
       <!-- expired state -->
-      <TradeAction v-if="tradeInfo.trade.state === TradeState.request_expired" message="This trade has expired" />
+      <TradeAction 
+        v-if="tradeInfo.trade.state === TradeState.request_expired || (isTradeExpired && tradeInfo.trade.state !== TradeState.escrow_funded)" 
+        message="This trade has expired" 
+      />
+      <!-- expired state with funds in escrow (EVM chains - buyer can't dispute from this state) -->
+      <TradeAction 
+        v-if="isTradeExpired && tradeInfo.trade.state === TradeState.escrow_funded" 
+        message="This trade has expired. The seller needs to claim their refund." 
+      />
       <!-- Trade canceled -->
       <TradeAction
         v-if="['request_canceled', 'escrow_canceled', 'escrow_refunded'].includes(tradeInfo.trade.state)"
@@ -164,14 +262,24 @@ async function settleDispute(winner: string) {
         v-if="tradeInfo.offer.offer.offer_type === 'buy' && tradeInfo.trade.state === 'request_created'"
         message="Waiting for the buyer to accept the trade"
       />
-      <!-- #2 step or #1 step -->
-      <!-- if #2 step: The Seller needs to deposit crypto on escrow to enable the Buyer to transfer the Fiat -->
-      <!-- if #1 step: The Buyer requested a trade and the Seller should accept the trade by depositing the crypto on escrow -->
+      <!-- #1 step for sell offers -->
+      <!-- When a buyer requests a trade on a sell offer, the seller needs to accept it first -->
       <TradeAction
-        v-if="
-          (tradeInfo.offer.offer.offer_type === 'sell' && tradeInfo.trade.state === 'request_created') ||
-          tradeInfo.trade.state === 'request_accepted'
-        "
+        v-if="tradeInfo.offer.offer.offer_type === 'sell' && tradeInfo.trade.state === 'request_created'"
+        message="Review the request and accept the trade"
+        :buttons="[
+          {
+            label: 'accept trade',
+            action: () => {
+              acceptTradeRequest(tradeInfo.trade.id)
+            },
+          },
+        ]"
+      />
+      <!-- #2 step -->
+      <!-- After the trade is accepted, the Seller needs to deposit crypto on escrow -->
+      <TradeAction
+        v-if="tradeInfo.trade.state === 'request_accepted'"
         message="Please fund the trade"
         :buttons="[
           {
@@ -210,10 +318,10 @@ async function settleDispute(winner: string) {
         message="Trade finished successfully"
       />
       <!-- Expired state -->
-      <template v-if="tradeInfo.trade.state === TradeState.request_expired">
+      <template v-if="tradeInfo.trade.state === TradeState.request_expired || (isTradeExpired && tradeInfo.trade.state === TradeState.escrow_funded)">
         <!-- With funds -->
         <TradeAction
-          v-if="lastTradeState === TradeState.escrow_funded"
+          v-if="lastTradeState === TradeState.escrow_funded || tradeInfo.trade.state === TradeState.escrow_funded"
           message="This trade has expired. You have funds to be claimed."
           :buttons="[
             {
@@ -261,7 +369,7 @@ async function settleDispute(winner: string) {
     <!-- Trade Disputed -->
     <template v-if="tradeInfo.trade.state === 'escrow_disputed'">
       <TradeAction
-        v-if="tradeInfo.trade.arbitrator === client.userWallet.address"
+        v-if="tradeInfo.trade.arbitrator?.toLowerCase() === client.userWallet.address?.toLowerCase()"
         message="Carefully review the information provided by both parties before reaching a verdict"
         :buttons="[
           {
@@ -299,6 +407,7 @@ async function settleDispute(winner: string) {
       <p>Please note that requesting to cancel the transaction could impact on your reputation.</p>
       <p class="btn-action" @click="cancelTradeRequest(tradeInfo.trade.id)">Request cancel</p>
     </div>
+    <!-- Show dispute option for trades in fiat_deposited state -->
     <template v-if="tradeInfo.trade.state === 'fiat_deposited'">
       <div v-if="timeToEnableDispute.getTime() > 0" class="wrap">
         <p>
@@ -311,6 +420,45 @@ async function settleDispute(winner: string) {
         <p>
           If you run into problems with the transaction you can request to open a dispute. Only do this if you already
           tried to contact the other trader without success.
+        </p>
+        <p class="btn-action" @click="openDispute(tradeInfo.trade.id)">Request dispute</p>
+      </div>
+    </template>
+    <!-- Show dispute option for expired trades (EVM chains: only from fiat_deposited state) -->
+    <template v-if="(tradeInfo.trade.state === 'request_expired' || isTradeExpired) && tradeInfo.trade.state === 'fiat_deposited'">
+      <div v-if="timeToEnableDispute.getTime() > 0" class="wrap">
+        <p>
+          This trade has expired. A dispute option will be available in
+          {{ formatTimer(timeToEnableDispute, '00h 00m 00s') }}.
+        </p>
+      </div>
+      <div v-else class="wrap">
+        <p>
+          This trade has expired. You can open a dispute to resolve this issue.
+        </p>
+        <p class="btn-action" @click="openDispute(tradeInfo.trade.id)">Request dispute</p>
+      </div>
+    </template>
+    <!-- Show dispute option for expired trades (Cosmos chains: also from escrow_funded) -->
+    <template v-if="!isEVM && (tradeInfo.trade.state === 'request_expired' || isTradeExpired) && tradeInfo.trade.state === 'escrow_funded'">
+      <div v-if="timeToEnableDispute.getTime() > 0" class="wrap">
+        <p>
+          This trade has expired with funds in escrow. A dispute option will be available in
+          {{ formatTimer(timeToEnableDispute, '00h 00m 00s') }}.
+        </p>
+      </div>
+      <div v-else class="wrap">
+        <p>
+          This trade has expired with funds in escrow. You can open a dispute to resolve this issue.
+        </p>
+        <p class="btn-action" @click="openDispute(tradeInfo.trade.id)">Request dispute</p>
+      </div>
+    </template>
+    <!-- Show dispute option for escrow_funded state after dispute deadline (Cosmos only, non-expired) -->
+    <template v-if="!isEVM && tradeInfo.trade.state === 'escrow_funded' && !isTradeExpired && isSeller && timeToEnableDispute.getTime() <= 0">
+      <div class="wrap">
+        <p>
+          The buyer has not marked the payment as complete. You can open a dispute to resolve this issue.
         </p>
         <p class="btn-action" @click="openDispute(tradeInfo.trade.id)">Request dispute</p>
       </div>

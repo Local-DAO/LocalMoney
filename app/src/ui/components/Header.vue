@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import NavDesktop from './NavDesktop.vue'
 import NavMobile from './NavMobile.vue'
+import ChainSelector from './commons/ChainSelector.vue'
+import MultiWalletButton from './commons/MultiWalletButton.vue'
 import { useClientStore } from '~/stores/client'
-import { ChainClient } from '~/network/Chain'
 
 const client = useClientStore()
 const badge = computed(() => client.client.getName())
@@ -35,7 +36,10 @@ const isMobile = computed(() => width.value <= 550)
 
       <NavMobile v-if="isMobile" />
       <NavDesktop v-else />
-      <WalletButton />
+      <div class="header-actions">
+        <ChainSelector />
+        <MultiWalletButton />
+      </div>
     </div>
   </header>
 </template>
@@ -71,8 +75,8 @@ header {
       align-content: center;
 
       .logo {
-        width: 209px;
-        height: 54px;
+        width: 220px;
+        height: 42px;
         background-size: cover;
         background-image: $logo-horizontal-dark;
       }
@@ -91,6 +95,12 @@ header {
           padding: 6px 14px;
         }
       }
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
     @media only screen and (max-width: 550px) {

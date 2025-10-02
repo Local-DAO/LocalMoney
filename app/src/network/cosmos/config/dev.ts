@@ -5,7 +5,7 @@ export const DEV_CONFIG: CosmosConfig = {
   chainName: process.env.CHAIN_NAME ?? '',
   lcdUrl: process.env.LCD ?? '',
   rpcUrl: process.env.RPC ?? '',
-  addressPrefix: 'kujira',
+  addressPrefix: process.env.ADDR_PREFIX ?? 'kujira',
   coinDenom: 'KUJI',
   coinMinimalDenom: 'untrn',
   coinDecimals: 6,

@@ -1,0 +1,12 @@
+// Token addresses on different chains
+
+export const TOKEN_ADDRESSES = {
+  BSC_MAINNET: {
+    USDT: '0x55d398326f99059fF775485246999027B3197955', // BSC-USD (USDT) on BSC Mainnet
+    USDC: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', // USDC on BSC Mainnet
+  },
+  BSC_TESTNET: {
+    USDT: '0x337610d27c682E347C9cD60BD4b3b107C9d34dDd', // USDT on BSC Testnet
+    USDC: '0x64544969ed7EBf5f083679233325356EbE738930', // USDC on BSC Testnet
+  },
+} as const

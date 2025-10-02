@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useClientStore } from '~/stores/client'
 import { formatAddress, formatAmount } from '~/shared'
-import { ChainClient } from '~/network/Chain'
+import { getExplorerUrl } from '~/utils/explorer'
 
 const emit = defineEmits<{ (e: 'disconnect'): void }>()
 
@@ -14,12 +14,8 @@ const localBalance = computed(() => {
   }
 })
 
-const finder = computed(() => {
-  if (client.chainClient === ChainClient.kujiraMainnet) {
-    return `kaiyo-1/address/${userWallet.value.address}`
-  } else {
-    return `harpoon-4/address/${userWallet.value.address}`
-  }
+const explorerUrl = computed(() => {
+  return getExplorerUrl(client.chainClient, userWallet.value.address)
 })
 
 const widgetActive = ref(false)
@@ -38,7 +34,7 @@ defineExpose({ toggleWidget })
           <p class="address">{{ formatAddress(userWallet.address) }}</p>
         </div>
         <div class="actions">
-          <a :href="`https://finder.kujira.app/${finder}`" target="_blank" alt="Finder link">
+          <a :href="explorerUrl" target="_blank" alt="Explorer link">
             <svg
               class="icon-24"
               width="24"
@@ -133,6 +129,9 @@ defineExpose({ toggleWidget })
         </div>
       </div>
       <div class="wrap-btn">
+        <router-link :to="`/maker/${userWallet.address}`">
+          <button class="primary center-text">View Profile</button>
+        </router-link>
         <button class="secondary bg-gray300 center-text" @click="emit('disconnect')">disconnect</button>
       </div>
     </div>
@@ -214,6 +213,14 @@ defineExpose({ toggleWidget })
 
     .wrap-btn {
       margin: 8px 0 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      
+      a {
+        width: 100%;
+      }
+      
       button {
         width: 100%;
       }

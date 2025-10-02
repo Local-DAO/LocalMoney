@@ -7,9 +7,20 @@ export class FeedbackHandler {
     this.toast = toast
   }
 
-  public error(e: any) {
+  public error(e: ChainError | Error | unknown) {
     // We can validate each type of error here
-    const message = (e as ChainError).message
+    let message: string
+    
+    if (e instanceof Error || (e && typeof e === 'object' && 'message' in e)) {
+      message = (e as ChainError | Error).message
+    } else if (typeof e === 'string') {
+      message = e
+    } else {
+      message = 'An unexpected error occurred'
+    }
+    
+    console.error(message, e)
+    // Display the error message as a toast to the user
     this.toast.error(message)
   }
 

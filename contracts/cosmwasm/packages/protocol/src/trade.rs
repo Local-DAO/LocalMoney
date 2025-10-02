@@ -91,6 +91,27 @@ pub enum QueryMsg {
     ArbitratorsFiat {
         fiat: FiatCurrency,
     },
+    TradesCountByStates {
+        states: Vec<TradeState>,
+    },
+    TradesCountByFiatAndStates {
+        fiat: FiatCurrency,
+        states: Vec<TradeState>,
+    },
+    AllFiatsTradesCount {
+        states: Vec<TradeState>,
+    },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct TradesCount {
+    pub count: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct FiatTradesCount {
+    pub fiat: FiatCurrency,
+    pub count: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -185,7 +206,7 @@ pub enum TradeState {
 
 impl fmt::Display for TradeState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -232,7 +253,7 @@ impl Trade {
         denom_fiat_price: Uint256,
         state_history: Vec<TradeStateItem>,
     ) -> Trade {
-        return Trade {
+        Trade {
             id,
             addr,
             buyer,
@@ -253,24 +274,22 @@ impl Trade {
             denom_fiat_price,
             state_history,
             state: TradeState::RequestCreated,
-        };
+        }
     }
 
     pub fn get_state(&self) -> TradeState {
-        return self.state.clone();
+        self.state.clone()
     }
 
     pub fn request_expired(&self, block_time: u64) -> bool {
-        return self.expires_at.ne(&0) && block_time > self.expires_at;
+        self.expires_at.ne(&0) && block_time > self.expires_at
     }
 
     pub fn set_state(&mut self, new_state: TradeState, env: &Env, info: &MessageInfo) {
         // if the escrow is canceled or fiat is already deposited, the trade can no longer expire
-        if vec![
-            TradeState::RequestCanceled,
+        if [TradeState::RequestCanceled,
             TradeState::EscrowCanceled,
-            TradeState::FiatDeposited,
-        ]
+            TradeState::FiatDeposited]
         .contains(&new_state)
         {
             self.expires_at = 0;
@@ -322,11 +341,9 @@ impl TradeResponse {
         arbitrator_profile: Profile,
         block_time: u64,
     ) -> TradeResponse {
-        let trade_states = vec![
-            TradeState::EscrowDisputed,
+        let trade_states = [TradeState::EscrowDisputed,
             TradeState::SettledForMaker,
-            TradeState::SettledForTaker,
-        ];
+            TradeState::SettledForTaker];
         let state = if trade.request_expired(block_time) {
             TradeState::RequestExpired
         } else {
@@ -411,11 +428,11 @@ impl TradeModel<'_> {
     }
 
     pub fn may_load<'a>(storage: &'a mut dyn Storage, id: u64) -> TradeModel<'a> {
-        let trade_model = TradeModel {
+        
+        TradeModel {
             trade: TradeModel::from_store(storage, id),
             storage,
-        };
-        return trade_model;
+        }
     }
 
     pub fn trades_by_trader(
@@ -427,24 +444,34 @@ impl TradeModel<'_> {
         let range_from = last.map(Bound::exclusive);
         let trader_addr = Addr::unchecked(trader);
 
-        let result = trades()
+        // Get trades where user is buyer
+        let buyer_trades: Vec<Trade> = trades()
             .idx
-            .collection
-            .range(storage, None, range_from, Order::Descending)
-            .filter_map(|item| {
-                item.and_then(|(_, trade)| {
-                    if trade.seller.eq(&trader_addr) || trade.buyer.eq(&trader_addr) {
-                        Ok(Some(trade))
-                    } else {
-                        Ok(None)
-                    }
-                })
-                .unwrap()
-            })
+            .buyer
+            .prefix(trader_addr.clone())
+            .range(storage, None, range_from.clone(), Order::Descending)
             .take(limit)
+            .filter_map(|item| item.ok().map(|(_, trade)| trade))
             .collect();
 
-        Ok(result)
+        // Get trades where user is seller
+        let seller_trades: Vec<Trade> = trades()
+            .idx
+            .seller
+            .prefix(trader_addr)
+            .range(storage, None, range_from, Order::Descending)
+            .take(limit)
+            .filter_map(|item| item.ok().map(|(_, trade)| trade))
+            .collect();
+
+        // Combine and sort by ID (descending)
+        let mut all_trades = buyer_trades;
+        all_trades.extend(seller_trades);
+        all_trades.sort_by(|a, b| b.id.cmp(&a.id));
+        all_trades.dedup_by(|a, b| a.id == b.id);
+        all_trades.truncate(limit);
+
+        Ok(all_trades)
     }
 
     pub fn trades_by_arbitrator(
@@ -455,11 +482,9 @@ impl TradeModel<'_> {
     ) -> StdResult<Vec<Trade>> {
         let range_from = last.map(Bound::exclusive);
 
-        let trade_states = vec![
-            TradeState::EscrowDisputed,
+        let trade_states = [TradeState::EscrowDisputed,
             TradeState::SettledForMaker,
-            TradeState::SettledForTaker,
-        ];
+            TradeState::SettledForTaker];
 
         let result = trades()
             .idx
@@ -468,11 +493,11 @@ impl TradeModel<'_> {
             .range(storage, None, range_from, Order::Descending)
             .take(limit)
             .filter_map(|item| {
-                item.and_then(|(_, trade)| {
+                item.map(|(_, trade)| {
                     if trade_states.contains(&trade.get_state()) {
-                        Ok(Some(trade))
+                        Some(trade)
                     } else {
-                        Ok(None)
+                        None
                     }
                 })
                 .unwrap()
@@ -487,11 +512,13 @@ pub struct TradeIndexes<'a> {
     // pk goes to second tuple element
     pub collection: UniqueIndex<'a, u64, Trade, u64>,
     pub arbitrator: MultiIndex<'a, String, Trade, u64>,
+    pub buyer: MultiIndex<'a, Addr, Trade, u64>,
+    pub seller: MultiIndex<'a, Addr, Trade, u64>,
 }
 
 impl<'a> IndexList<Trade> for TradeIndexes<'a> {
     fn get_indexes(&'_ self) -> Box<dyn Iterator<Item = &'_ dyn Index<Trade>> + '_> {
-        let v: Vec<&dyn Index<Trade>> = vec![&self.collection, &self.arbitrator];
+        let v: Vec<&dyn Index<Trade>> = vec![&self.collection, &self.arbitrator, &self.buyer, &self.seller];
         Box::new(v.into_iter())
     }
 }
@@ -504,6 +531,16 @@ pub fn trades() -> IndexedMap<u64, Trade, TradeIndexes<'static>> {
             |_, t| t.arbitrator.to_string(),
             pk_namespace,
             "trades__arbitrator",
+        ),
+        buyer: MultiIndex::new(
+            |_, t| t.buyer.clone(),
+            pk_namespace,
+            "trades__buyer",
+        ),
+        seller: MultiIndex::new(
+            |_, t| t.seller.clone(),
+            pk_namespace,
+            "trades__seller",
         ),
     };
     IndexedMap::new(pk_namespace, indexes)
@@ -524,7 +561,7 @@ impl ArbitratorModel {
             .arbitrator
             .prefix(arbitrator)
             .range(storage, None, None, Order::Descending)
-            .flat_map(|item| item.and_then(|(_, arbitrator)| Ok(arbitrator)))
+            .flat_map(|item| item.map(|(_, arbitrator)| arbitrator))
             .collect();
 
         Ok(result)
@@ -541,11 +578,11 @@ impl ArbitratorModel {
             .prefix(arbitrator)
             .range(storage, None, None, Order::Descending)
             .find_map(|item| {
-                item.and_then(|(_, arb)| {
+                item.map(|(_, arb)| {
                     if arb.fiat.eq(&fiat) {
-                        Ok(Some(arb))
+                        Some(arb)
                     } else {
-                        Ok(None)
+                        None
                     }
                 })
                 .unwrap()
@@ -558,7 +595,7 @@ impl ArbitratorModel {
     pub fn query_arbitrators(storage: &dyn Storage) -> StdResult<Vec<Arbitrator>> {
         let result = arbitrators()
             .range(storage, None, None, Order::Descending)
-            .flat_map(|item| item.and_then(|(_, arbitrator)| Ok(arbitrator)))
+            .flat_map(|item| item.map(|(_, arbitrator)| arbitrator))
             .collect();
 
         Ok(result)
@@ -574,7 +611,7 @@ impl ArbitratorModel {
             .prefix(fiat.clone().to_string())
             .range(storage, None, None, Order::Descending)
             .take(10)
-            .flat_map(|item| item.and_then(|(_, arbitrator)| Ok(arbitrator)))
+            .flat_map(|item| item.map(|(_, arbitrator)| arbitrator))
             .collect();
 
         Ok(result)
@@ -593,7 +630,7 @@ impl ArbitratorModel {
             .prefix(fiat.to_string())
             .range(storage, None, None, Order::Descending)
             .take(10)
-            .flat_map(|item| item.and_then(|(_, arbitrator)| Ok(arbitrator)))
+            .flat_map(|item| item.map(|(_, arbitrator)| arbitrator))
             .collect();
         let arbitrator_count = result.len();
 

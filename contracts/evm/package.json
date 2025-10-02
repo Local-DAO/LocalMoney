@@ -1,0 +1,46 @@
+{
+  "name": "evm",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "compile": "just compile",
+    "test": "just test",
+    "coverage": "just coverage",
+    "gas-report": "just gas-report",
+    "size-contracts": "just size",
+    "deploy:testnet": "just deploy-testnet",
+    "deploy:bsc-mainnet": "just deploy-bsc-mainnet",
+    "deploy:bsc-testnet": "just deploy-bsc-testnet",
+    "verify": "just verify-contracts",
+    "test:integration": "just test-integration",
+    "test:security": "just test-security",
+    "check:prices": "just check-prices",
+    "update:prices": "just update-prices",
+    "help:deploy": "just help-deploy",
+    "help:check": "just help-check",
+    "help:update": "just help-update",
+    "help:networks": "just help-networks"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@nomiclabs/hardhat-etherscan": "^3.1.8",
+    "@openzeppelin/hardhat-upgrades": "^3.9.1",
+    "hardhat": "^2.26.3",
+    "hardhat-contract-sizer": "^2.10.1",
+    "hardhat-deploy": "^1.0.4",
+    "hardhat-gas-reporter": "^1.0.10",
+    "solidity-coverage": "^0.8.16"
+  },
+  "dependencies": {
+    "@chainlink/contracts": "^1.4.0",
+    "@openzeppelin/contracts": "^5.4.0",
+    "@openzeppelin/contracts-upgradeable": "^5.4.0",
+    "@uniswap/v3-core": "^1.0.1",
+    "@uniswap/v3-periphery": "^1.4.4",
+    "dotenv": "^17.2.1"
+  }
+}

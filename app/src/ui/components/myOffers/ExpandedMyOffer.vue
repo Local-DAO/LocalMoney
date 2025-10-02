@@ -10,24 +10,38 @@ import {
 import { microDenomToDisplay } from '~/utils/denom'
 import type { GetOffer } from '~/types/components.interface'
 import { useClientStore } from '~/stores/client'
+import { ChainClient } from '~/network/Chain'
+import { CRYPTO_DECIMAL_PLACES } from '~/utils/constants'
 
 const props = defineProps<{ offer: GetOffer }>()
 const emit = defineEmits<{ (e: 'cancel'): void }>()
 const client = useClientStore()
+// Use appropriate decimal places based on chain type (EVM uses 18 decimals, Cosmos uses 6)
+// Amounts are normalized to micro-units (1e6) across chains
+const decimalPlaces = CRYPTO_DECIMAL_PLACES
+const displayDecimals = client.client.getChainType() === 'evm' ? 18 : 6
+
 const updatedOffer = ref<GetOffer>({
   ...props.offer,
-  min_amount: `${formatAmount(props.offer.min_amount, true, 6)}`,
-  max_amount: `${formatAmount(props.offer.max_amount, true, 6)}`,
+  min_amount: `${formatAmount(props.offer.min_amount, true, displayDecimals)}`,
+  max_amount: `${formatAmount(props.offer.max_amount, true, displayDecimals)}`,
 })
 
 const marginRate = computed(() => convertOfferRateToMarginRate(props.offer.rate))
 const margin = ref(marginRate.value.margin)
 const marginOffset = ref(marginRate.value.marginOffset)
-const minAmount = ref(Number(props.offer.min_amount) / 1000000)
-const maxAmount = ref(Number(props.offer.max_amount) / 1000000)
+const minAmount = ref(Number(props.offer.min_amount) / decimalPlaces)
+const maxAmount = ref(Number(props.offer.max_amount) / decimalPlaces)
 const description = ref(updatedOffer.value.description)
 const rate = ref(props.offer.rate)
 const valid = ref(true)
+
+// EVM chains now support description updates
+// Keeping this computed property for potential future use
+const isEVMChain = computed(() => {
+  return client.chainClient === ChainClient.bscMainnet || 
+         client.chainClient === ChainClient.bscTestnet
+})
 
 // watch min amount and max amount and update their respective values in the props.offer
 watch(minAmount, (val) => {
@@ -39,6 +53,23 @@ watch(maxAmount, (val) => {
   valid.value = Number(updatedOffer.value.min_amount) < Number(updatedOffer.value.max_amount)
 })
 
+// Update rate when margin or marginOffset changes
+watch([margin, marginOffset], () => {
+  // Parse marginOffset to handle percentage strings
+  let marginOffsetNum = marginOffset.value
+  if (typeof marginOffsetNum === 'string') {
+    marginOffsetNum = parseFloat(marginOffsetNum.replace(/[^0-9.-]/g, ''))
+  }
+  if (isNaN(marginOffsetNum)) {
+    marginOffsetNum = 0
+  }
+  
+  const newRate = convertMarginRateToOfferRate(margin.value, marginOffsetNum)
+  if (!isNaN(newRate)) {
+    rate.value = newRate
+  }
+})
+
 const fiatPriceByRate = computed(() => {
   const denomFiatPrice = client.getFiatPrice(props.offer.fiat_currency, props.offer.denom)
   return calculateFiatPriceByRate(denomFiatPrice, rate.value)
@@ -47,12 +78,46 @@ const offerPrice = computed(() => `${props.offer.fiat_currency} ${formatAmount(f
 
 function update() {
   const offer = updatedOffer.value
+  
+  // Parse marginOffset to handle percentage strings (e.g., "5%" -> 5)
+  let marginOffsetNum = marginOffset.value
+  if (typeof marginOffsetNum === 'string') {
+    // Remove any non-numeric characters except decimal points
+    marginOffsetNum = parseFloat(marginOffsetNum.replace(/[^0-9.-]/g, ''))
+  }
+  
+  // Default to 0 if parsing fails
+  if (isNaN(marginOffsetNum)) {
+    marginOffsetNum = 0
+  }
+  
+  // Use the actual ref values for margin and parsed marginOffset
+  const calculatedRate = convertMarginRateToOfferRate(margin.value, marginOffsetNum)
+  
+  // Validate all numeric values before sending
+  const rateValue = Math.floor(Number(calculatedRate))
+  const minAmountValue = Math.floor(Number(offer.min_amount) * decimalPlaces)
+  const maxAmountValue = Math.floor(Number(offer.max_amount) * decimalPlaces)
+  
+  // Check for NaN or invalid values
+  if (isNaN(rateValue) || isNaN(minAmountValue) || isNaN(maxAmountValue)) {
+    console.error('Invalid numeric values detected:', { 
+      rateValue, 
+      minAmountValue, 
+      maxAmountValue,
+      margin: margin.value,
+      marginOffset: marginOffset.value,
+      marginOffsetNum
+    })
+    return
+  }
+  
   client.updateOffer({
     id: offer.id,
     state: offer.state,
-    rate: `${convertMarginRateToOfferRate(marginRate.value.margin, marginRate.value.marginOffset)}`,
-    min_amount: `${(Number(offer.min_amount) * 1000000).toFixed(0)}`,
-    max_amount: `${(Number(offer.max_amount) * 1000000).toFixed(0)}`,
+    rate: rateValue.toString(),
+    min_amount: minAmountValue.toString(),
+    max_amount: maxAmountValue.toString(),
     description: description.value,
   })
 }
@@ -86,7 +151,7 @@ function update() {
             <CurrencyInput
               v-model="minAmount"
               placeholder="Offer min amount"
-              :decimals="6"
+              :decimals="displayDecimals"
               :isCrypto="true"
               :prefix="microDenomToDisplay(offer.denom.native, client.chainClient)"
             />
@@ -97,7 +162,7 @@ function update() {
             <CurrencyInput
               v-model="maxAmount"
               placeholder="Offer max amount"
-              :decimals="6"
+              :decimals="displayDecimals"
               :isCrypto="true"
               :prefix="microDenomToDisplay(offer.denom.native, client.chainClient)"
             />
@@ -118,7 +183,7 @@ function update() {
               v-model="marginOffset"
               v-maska="['##%', '#%']"
               placeholder="0%"
-              @maska="marginRate.marginOffset = $event.target.dataset.maskRawValue"
+              @maska="marginOffset = Number($event.target.dataset.maskRawValue) || 0"
             />
           </div>
         </div>
@@ -128,7 +193,7 @@ function update() {
           <div class="wrap">
             <div class="wrap-label">
               <label>Edit offer description</label>
-              <IconTooltip content="Here you can write the payment options you will be accepting for this offer." />
+              <IconTooltip :content="'Here you can write the payment options you will be accepting for this offer.'" />
             </div>
             <textarea
               v-model="description"
@@ -289,6 +354,19 @@ function update() {
         }
         textarea {
           background-color: $background;
+          
+          &.disabled-field {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: $gray100;
+          }
+        }
+        
+        .warning-text {
+          font-size: 12px;
+          color: $secondary;
+          margin-top: 8px;
+          font-style: italic;
         }
       }
       .wrap-btns {

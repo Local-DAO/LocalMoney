@@ -10,7 +10,7 @@ const currentDate = computed(() => formatDate(new Date(props.tradeInfo.trade.cre
 const fiatCurrency = computed(() => props.tradeInfo.offer.offer.fiat_currency)
 const fiatAmountStr = computed(() => {
   const fiatAmount = formatFiatAmount(
-    (parseInt(props.tradeInfo.trade.amount) / 1000000) * (props.tradeInfo.trade.denom_fiat_price / 100)
+    (parseInt(props.tradeInfo.trade.amount) / 1000000) * (props.tradeInfo.trade.denom_fiat_price / 1000000)
   )
   return `${fiatCurrency.value} ${fiatAmount}`
 })
@@ -58,7 +58,9 @@ const counterparty = computed(() => {
       <p>{{ fiatAmountStr }}</p>
     </div>
     <div class="col-6 trader">
-      <p>{{ formatAddress(counterparty) }}</p>
+      <router-link :to="`/maker/${counterparty}`">
+        {{ formatAddress(counterparty) }}
+      </router-link>
     </div>
     <div class="col-7">
       <p>{{ formatTradeState(tradeInfo.trade.state) }}</p>
@@ -95,6 +97,20 @@ const counterparty = computed(() => {
         width: 16px;
         height: 16px;
         stroke: $gray900;
+      }
+    }
+  }
+
+  .trader {
+    a {
+      color: $gray900;
+      font-size: 14px;
+      font-weight: $regular;
+      text-decoration: none;
+
+      &:hover {
+        color: $primary;
+        text-decoration: underline;
       }
     }
   }

@@ -8,7 +8,7 @@ import './ui/style/reset.scss'
 import 'vue-toastification/dist/index.css'
 
 const client = useClientStore()
-client.setClient(ChainClient.neutron) // required to properly init chain
+client.setClient(ChainClient.bscMainnet) // required to properly init chain
 const loading = computed(() => client.loadingState)
 
 let title: string
@@ -22,8 +22,10 @@ switch (client.chainClient) {
   case ChainClient.neutron:
     title = 'Local Money - powered by Neutron'
     break
+  case ChainClient.bscMainnet:
+    title = 'Local Money - BNB Chain'
   default:
-    title = 'Local Money - TESTNET'
+    title = 'Local Money'
     break
 }
 

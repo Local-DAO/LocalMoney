@@ -4,7 +4,7 @@ import type { Denom, OfferResponse } from '~/types/components.interface'
 import { FiatCurrency, OfferOrder, OfferType, isFiatCurrency, isOfferType } from '~/types/components.interface'
 import { useClientStore } from '~/stores/client'
 import { ExpandableItem } from '~/ui/components/util/ExpandableItem'
-import { defaultMicroDenomAvailable, denomsAvailable, displayToDenom } from '~/utils/denom'
+import { defaultMicroDenomAvailable, denomsAvailable, displayToDenom, checkMicroDenomAvailable } from '~/utils/denom'
 import { fiatsAvailable } from '~/utils/fiat'
 import { checkValidOffer } from '~/utils/validations'
 import { AppEvents, trackAppEvents } from '~/analytics/analytics'
@@ -65,12 +65,12 @@ async function fetchMoreOffers() {
   )
 }
 
-async function updateFiatPrice() {
-  const denom: Denom = { native: selectedDenom.value }
-  await client.updateFiatPrice(selectedFiat.value, denom)
-}
-
 onBeforeMount(() => {
+  // Check if stored denom is valid for current chain
+  if (!checkMicroDenomAvailable(selectedDenom.value, client.chainClient)) {
+    selectedDenom.value = defaultMicroDenomAvailable(client.chainClient)
+  }
+  
   const denomDisplayName = (route.params.token as string) ?? ''
   const fiat = (route.params.fiat as string) ?? ''
   const type = (route.params.type as string) ?? ''
@@ -83,22 +83,30 @@ onBeforeMount(() => {
 })
 
 onMounted(async () => {
-  await updateFiatPrice()
   await fetchOffers()
 })
 
 watch(selectedFiat, async () => {
-  await updateFiatPrice()
   await fetchOffers()
 })
 watch(selectedDenom, async () => {
-  await updateFiatPrice()
   await fetchOffers()
 })
 watch(selectedOfferItem, async () => {
   console.log('selectedOfferItem', selectedOfferItem.value)
 })
 watch(selectedType, async () => await fetchOffers())
+
+// Watch for chain changes and auto-select first crypto
+watch(() => client.chainClient, (newChain, oldChain) => {
+  if (newChain !== oldChain) {
+    // Auto-select the first available cryptocurrency for the new chain
+    const firstDenom = defaultMicroDenomAvailable(newChain)
+    if (firstDenom) {
+      selectedDenom.value = firstDenom
+    }
+  }
+})
 </script>
 
 <template>

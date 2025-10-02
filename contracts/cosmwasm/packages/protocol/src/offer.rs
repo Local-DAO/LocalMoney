@@ -35,7 +35,7 @@ pub fn offers() -> IndexedMap<u64, Offer, OfferIndexes<'static>> {
             |_, offer: &Offer| {
                 format!(
                     "{}{}{}{}",
-                    offer.offer_type.to_string(),
+                    offer.offer_type,
                     &offer.fiat_currency.to_string(),
                     &denom_to_string(&offer.denom),
                     &offer.state.to_string()
@@ -111,10 +111,22 @@ pub enum QueryMsg {
         limit: u32,
         last: Option<u64>,
     },
+    OffersCountByStates {
+        states: Vec<OfferState>,
+    },
+    AllFiatsOffersCount {
+        states: Vec<OfferState>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct OffersCount {
+    pub count: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct FiatOffersCount {
+    pub fiat: FiatCurrency,
     pub count: u64,
 }
 
@@ -146,7 +158,7 @@ pub struct OfferModel<'a> {
 
 impl<'a> OfferModel<'a> {
     pub fn store(storage: &mut dyn Storage, offer: &Offer) -> StdResult<()> {
-        offers().save(storage, offer.id, &offer)
+        offers().save(storage, offer.id, offer)
     }
 
     pub fn from_store(storage: &dyn Storage, id: u64) -> Offer {
@@ -164,11 +176,11 @@ impl<'a> OfferModel<'a> {
     }
 
     pub fn may_load(storage: &'a mut dyn Storage, id: u64) -> OfferModel<'a> {
-        let offer_model = OfferModel {
+        
+        OfferModel {
             offer: OfferModel::from_store(storage, id),
             storage,
-        };
-        return offer_model;
+        }
     }
 
     pub fn update(&mut self, msg: OfferUpdateMsg) -> &Offer {
@@ -198,14 +210,14 @@ impl<'a> OfferModel<'a> {
             .range(deps.storage, None, range_from, Order::Descending)
             .take(limit as usize)
             .flat_map(|item| {
-                item.and_then(|(_, offer)| {
+                item.map(|(_, offer)| {
                     let profile = load_profile(
                         &deps.querier,
                         hub_config.profile_addr.to_string(),
                         offer.clone().owner,
                     )
                     .unwrap();
-                    Ok(OfferResponse { offer, profile })
+                    OfferResponse { offer, profile }
                 })
             })
             .collect();
@@ -236,8 +248,8 @@ impl<'a> OfferModel<'a> {
         )
         .unwrap();
 
-        let prefix = fiat_currency.to_string()
-            + &offer_type.to_string()
+        let prefix = offer_type.to_string()
+            + &fiat_currency.to_string()
             + &denom_to_string(&denom)
             + &*OfferState::Active.to_string();
 
@@ -247,7 +259,7 @@ impl<'a> OfferModel<'a> {
             .prefix(prefix)
             .range(storage, None, range_from, std_order)
             .flat_map(|item| {
-                item.and_then(|(_, offer)| {
+                item.map(|(_, offer)| {
                     let profile_found = profiles
                         .clone()
                         .into_iter()
@@ -266,7 +278,7 @@ impl<'a> OfferModel<'a> {
                         new_profile
                     };
 
-                    Ok(OfferResponse { offer, profile })
+                    OfferResponse { offer, profile }
                 })
             })
             .take(limit as usize)
@@ -327,13 +339,13 @@ pub enum OfferOrder {
 
 impl fmt::Display for OfferType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
 impl fmt::Display for OfferState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
