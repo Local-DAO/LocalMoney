@@ -13,7 +13,8 @@ const tradeResult = computed(() => client.trades)
 const trades = computed(() => {
   if (tradeResult.value.isSuccess()) {
     return tradeResult.value.data.filter((trade) => {
-      return checkValidOffer(trade.offer.offer, client.chainClient)
+      // Guard for chains that might not include nested offer immediately
+      return trade?.offer?.offer ? checkValidOffer(trade.offer.offer, client.chainClient) : false
     })
   } else {
     return []

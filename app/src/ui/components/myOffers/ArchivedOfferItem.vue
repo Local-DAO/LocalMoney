@@ -11,18 +11,29 @@ const client = useClientStore()
 const currentDate = computed(() => formatDate(new Date(props.offer.timestamp * 1000), false))
 const fiatCurrency = computed(() => props.offer.fiat_currency)
 const price = computed(() => {
-  const denomFiatPrice = client.getFiatPrice(props.offer.fiat_currency, props.offer.denom)
+  const baseFiatPrice = client.getFiatPrice(props.offer.fiat_currency, props.offer.denom)
+  
+  // If no price is available (0), show price unavailable
+  if (baseFiatPrice === 0) {
+    return `${props.offer.fiat_currency} -`
+  }
+  
   return `${props.offer.fiat_currency} ${formatAmount(
-    calculateFiatPriceByRate(denomFiatPrice, props.offer.rate),
+    calculateFiatPriceByRate(baseFiatPrice * 100, props.offer.rate) / 100,
     false
   )}`
 })
+// Amounts are normalized to micro-units (1e6) across chains
+const decimalPlaces = computed(() => 1000000)
 const limit = computed(() => {
-  const min = formatAmount(Number(props.offer.min_amount), true, 6)
-  const max = formatAmount(Number(props.offer.max_amount), true, 6)
+  const minAmount = Number(props.offer.min_amount) / decimalPlaces.value
+  const maxAmount = Number(props.offer.max_amount) / decimalPlaces.value
+  const min = minAmount.toFixed(6)
+  const max = maxAmount.toFixed(6)
   const denom = microDenomToDisplay(denomToValue(props.offer.denom), client.chainClient)
-  return `${min} - ${max} ${denom}`
+  return `${parseFloat(min)} - ${parseFloat(max)} ${denom}`
 })
+
 const type = computed(() => (props.offer.offer_type === OfferType.buy ? 'Buying' : 'Selling'))
 
 function unarchive() {
@@ -30,7 +41,7 @@ function unarchive() {
 }
 
 onBeforeMount(async () => {
-  await client.updateFiatPrice(props.offer.fiat_currency, props.offer.denom)
+  // Price updates handled by backend/oracle
 })
 </script>
 

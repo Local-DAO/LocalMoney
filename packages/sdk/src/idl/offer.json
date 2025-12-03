@@ -1,0 +1,1435 @@
+{
+  "address": "CZR8LiYhioRCc9qYFBfMkQ3JnkgU2PfAD8fMLN5WrNDo",
+  "metadata": {
+    "name": "offer",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "LocalMoney Offer Program - Marketplace listing management"
+  },
+  "instructions": [
+    {
+      "name": "create_offer",
+      "docs": [
+        "Create a new offer",
+        "",
+        "Creates a new buy or sell offer on the marketplace.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - CreateOffer context with offer PDA, counter, owner, token mint, and hub_config",
+        "* `params` - Offer parameters",
+        "",
+        "# Access Control",
+        "",
+        "Anyone can create an offer, subject to max_active_offers limit from Hub config.",
+        "Profile program is called via CPI to update offer counters (with Hub-based authorization)."
+      ],
+      "discriminator": [
+        237,
+        233,
+        192,
+        168,
+        248,
+        7,
+        249,
+        241
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "counter.next_id",
+                "account": "OfferCounter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "owner_profile",
+          "docs": [
+            "Owner's profile (for limit checking and counter update)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                105,
+                94,
+                163,
+                210,
+                170,
+                223,
+                187,
+                115,
+                217,
+                215,
+                124,
+                81,
+                110,
+                1,
+                242,
+                150,
+                89,
+                140,
+                163,
+                16,
+                66,
+                9,
+                127,
+                184,
+                47,
+                113,
+                40,
+                9,
+                161,
+                128,
+                22,
+                4
+              ]
+            }
+          }
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config (for max_active_offers limit and circuit breaker)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "profile_program",
+          "docs": [
+            "Profile program for CPI"
+          ],
+          "address": "86KWUvm3YK3fsSqSF1iLCRB2mLmHFcGUozFvD823Npf5"
+        },
+        {
+          "name": "offer_program",
+          "docs": [
+            "The Offer program account for CPI caller identification"
+          ],
+          "address": "CZR8LiYhioRCc9qYFBfMkQ3JnkgU2PfAD8fMLN5WrNDo"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "CreateOfferParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete_offer",
+      "docs": [
+        "Delete an offer",
+        "",
+        "Permanently marks an offer as deleted. This is a terminal state.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - DeleteOffer context with offer PDA and owner",
+        "",
+        "# Access Control",
+        "",
+        "Only the offer owner can delete their offer."
+      ],
+      "discriminator": [
+        144,
+        92,
+        174,
+        254,
+        109,
+        200,
+        70,
+        39
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer.id",
+                "account": "Offer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "offer"
+          ]
+        },
+        {
+          "name": "owner_profile",
+          "docs": [
+            "Owner's profile (for counter update)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                105,
+                94,
+                163,
+                210,
+                170,
+                223,
+                187,
+                115,
+                217,
+                215,
+                124,
+                81,
+                110,
+                1,
+                242,
+                150,
+                89,
+                140,
+                163,
+                16,
+                66,
+                9,
+                127,
+                184,
+                47,
+                113,
+                40,
+                9,
+                161,
+                128,
+                22,
+                4
+              ]
+            }
+          }
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config for CPI authorization"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        },
+        {
+          "name": "profile_program",
+          "docs": [
+            "Profile program for CPI"
+          ],
+          "address": "86KWUvm3YK3fsSqSF1iLCRB2mLmHFcGUozFvD823Npf5"
+        },
+        {
+          "name": "offer_program",
+          "docs": [
+            "The Offer program account for CPI caller identification"
+          ],
+          "address": "CZR8LiYhioRCc9qYFBfMkQ3JnkgU2PfAD8fMLN5WrNDo"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_counter",
+      "docs": [
+        "Initialize the offer counter",
+        "",
+        "This must be called once before any offers can be created.",
+        "It initializes the global offer counter PDA."
+      ],
+      "discriminator": [
+        67,
+        89,
+        100,
+        87,
+        231,
+        172,
+        35,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "pause_offer",
+      "docs": [
+        "Pause an offer",
+        "",
+        "Temporarily disables an offer without deleting it.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - PauseOffer context with offer PDA and owner",
+        "",
+        "# Access Control",
+        "",
+        "Only the offer owner can pause their offer."
+      ],
+      "discriminator": [
+        72,
+        238,
+        195,
+        199,
+        72,
+        37,
+        240,
+        228
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer.id",
+                "account": "Offer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "offer"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "resume_offer",
+      "docs": [
+        "Resume a paused offer",
+        "",
+        "Re-activates a previously paused offer.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - ResumeOffer context with offer PDA and owner",
+        "",
+        "# Access Control",
+        "",
+        "Only the offer owner can resume their offer."
+      ],
+      "discriminator": [
+        197,
+        129,
+        242,
+        229,
+        41,
+        156,
+        140,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer.id",
+                "account": "Offer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "offer"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_offer",
+      "docs": [
+        "Update an existing offer",
+        "",
+        "Allows the offer owner to update price, amounts, or description.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - UpdateOffer context with offer PDA and owner",
+        "* `params` - Updated parameters (all optional)",
+        "",
+        "# Access Control",
+        "",
+        "Only the offer owner can update their offer."
+      ],
+      "discriminator": [
+        191,
+        70,
+        15,
+        66,
+        224,
+        2,
+        249,
+        223
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer.id",
+                "account": "Offer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "offer"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "UpdateOfferParams"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "HubConfig",
+      "discriminator": [
+        115,
+        89,
+        81,
+        4,
+        182,
+        207,
+        219,
+        46
+      ]
+    },
+    {
+      "name": "Offer",
+      "discriminator": [
+        215,
+        88,
+        60,
+        71,
+        170,
+        162,
+        73,
+        229
+      ]
+    },
+    {
+      "name": "OfferCounter",
+      "discriminator": [
+        37,
+        184,
+        37,
+        52,
+        165,
+        183,
+        150,
+        245
+      ]
+    },
+    {
+      "name": "UserProfile",
+      "discriminator": [
+        32,
+        37,
+        119,
+        205,
+        179,
+        180,
+        13,
+        194
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "OfferCreated",
+      "discriminator": [
+        31,
+        236,
+        215,
+        144,
+        75,
+        45,
+        157,
+        87
+      ]
+    },
+    {
+      "name": "OfferDeleted",
+      "discriminator": [
+        36,
+        115,
+        88,
+        175,
+        127,
+        24,
+        84,
+        51
+      ]
+    },
+    {
+      "name": "OfferPaused",
+      "discriminator": [
+        242,
+        83,
+        238,
+        50,
+        131,
+        4,
+        86,
+        241
+      ]
+    },
+    {
+      "name": "OfferResumed",
+      "discriminator": [
+        168,
+        38,
+        47,
+        180,
+        77,
+        242,
+        235,
+        212
+      ]
+    },
+    {
+      "name": "OfferUpdated",
+      "discriminator": [
+        148,
+        115,
+        79,
+        188,
+        0,
+        21,
+        230,
+        29
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "Unauthorized: only offer owner can perform this action"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidOfferType",
+      "msg": "Invalid offer type"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidAmountRange",
+      "msg": "Invalid amount range: min must be less than max"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidStateTransition",
+      "msg": "Invalid state transition"
+    },
+    {
+      "code": 6004,
+      "name": "DescriptionTooLong",
+      "msg": "Description exceeds maximum length (280 characters)"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidFiatCurrency",
+      "msg": "Invalid fiat currency code"
+    },
+    {
+      "code": 6006,
+      "name": "OfferNotActive",
+      "msg": "Offer is not active"
+    },
+    {
+      "code": 6007,
+      "name": "OfferDeleted",
+      "msg": "Offer is deleted"
+    },
+    {
+      "code": 6008,
+      "name": "MaxActiveOffersReached",
+      "msg": "Maximum active offers reached"
+    },
+    {
+      "code": 6009,
+      "name": "OfferCounterOverflow",
+      "msg": "Offer counter overflow"
+    },
+    {
+      "code": 6010,
+      "name": "NewOffersPaused",
+      "msg": "New offers are currently paused"
+    }
+  ],
+  "types": [
+    {
+      "name": "CreateOfferParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer_type",
+            "type": {
+              "defined": {
+                "name": "OfferType"
+              }
+            }
+          },
+          {
+            "name": "fiat_currency",
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "min_amount",
+            "type": "u64"
+          },
+          {
+            "name": "max_amount",
+            "type": "u64"
+          },
+          {
+            "name": "rate",
+            "type": "u64"
+          },
+          {
+            "name": "description",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HubConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "admin",
+            "docs": [
+              "Admin authority"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "offer_program",
+            "docs": [
+              "Program addresses"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "trade_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "profile_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "arbitrator_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_oracle_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "burn_fee_pct",
+            "docs": [
+              "Fee configuration (basis points, 10000 = 100%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "chain_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "warchest_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "conversion_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "arbitrator_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "min_trade_amount",
+            "docs": [
+              "Trading limits (USD cents)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_trade_amount",
+            "type": "u64"
+          },
+          {
+            "name": "max_active_offers",
+            "type": "u8"
+          },
+          {
+            "name": "max_active_trades",
+            "type": "u8"
+          },
+          {
+            "name": "trade_expiration_timer",
+            "docs": [
+              "Timers (seconds)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "trade_dispute_timer",
+            "type": "u64"
+          },
+          {
+            "name": "global_pause",
+            "docs": [
+              "Circuit breakers"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "pause_new_offers",
+            "type": "bool"
+          },
+          {
+            "name": "pause_new_trades",
+            "type": "bool"
+          },
+          {
+            "name": "pause_escrow_funding",
+            "type": "bool"
+          },
+          {
+            "name": "pause_escrow_release",
+            "type": "bool"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Treasury addresses"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "warchest",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Offer",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "id",
+            "docs": [
+              "Unique offer ID"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Offer owner"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "offer_type",
+            "docs": [
+              "Offer type (Buy or Sell)"
+            ],
+            "type": {
+              "defined": {
+                "name": "OfferType"
+              }
+            }
+          },
+          {
+            "name": "state",
+            "docs": [
+              "Offer state"
+            ],
+            "type": {
+              "defined": {
+                "name": "OfferState"
+              }
+            }
+          },
+          {
+            "name": "fiat_currency",
+            "docs": [
+              "Fiat currency code (ISO 4217, e.g., \"USD\")"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "token_mint",
+            "docs": [
+              "SPL token mint"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "min_amount",
+            "docs": [
+              "Minimum amount (token lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_amount",
+            "docs": [
+              "Maximum amount (token lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "rate",
+            "docs": [
+              "Exchange rate (fiat cents per token unit)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "description",
+            "docs": [
+              "Description (max 280 chars)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamps"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferCounter",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "next_id",
+            "docs": [
+              "Next offer ID to assign"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer_id",
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "offer_type",
+            "type": {
+              "defined": {
+                "name": "OfferType"
+              }
+            }
+          },
+          {
+            "name": "fiat_currency",
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferDeleted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer_id",
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferPaused",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer_id",
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferResumed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer_id",
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferState",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Paused"
+          },
+          {
+            "name": "Deleted"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Buy"
+          },
+          {
+            "name": "Sell"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer_id",
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateOfferParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "min_amount",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "max_amount",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "rate",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "description",
+            "type": {
+              "option": "string"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserProfile",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Profile owner"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "contact_info",
+            "docs": [
+              "Encrypted contact information (max 280 chars)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "encryption_key",
+            "docs": [
+              "Encryption key for contact info (max 280 chars)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "total_trades",
+            "docs": [
+              "Trading statistics"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "completed_trades",
+            "type": "u64"
+          },
+          {
+            "name": "disputed_trades",
+            "type": "u64"
+          },
+          {
+            "name": "total_buy_volume",
+            "type": "u64"
+          },
+          {
+            "name": "total_sell_volume",
+            "type": "u64"
+          },
+          {
+            "name": "active_offers",
+            "docs": [
+              "Active counters (for limit enforcement)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "active_trades",
+            "type": "u8"
+          },
+          {
+            "name": "reputation_score",
+            "docs": [
+              "Reputation score (0-10000 basis points, 10000 = 100%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamps"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

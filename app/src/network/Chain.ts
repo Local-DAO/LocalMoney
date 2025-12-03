@@ -9,6 +9,10 @@ import {
 import { NEUTRON_CONFIG, NEUTRON_HUB_INFO } from './cosmos/config/neutron'
 import { DEV_CONFIG, DEV_HUB_INFO } from './cosmos/config/dev'
 import { TERRA_CONFIG, TERRA_HUB_INFO } from './cosmos/config/terra'
+import { MANTRA_CONFIG, MANTRA_HUB_INFO } from './cosmos/config/mantra'
+import { COSMOSHUB_CONFIG, COSMOSHUB_HUB_INFO } from './cosmos/config/cosmoshub'
+import { BSC_MAINNET_CONFIG, BSC_MAINNET_HUB_INFO, BSC_TESTNET_CONFIG, BSC_TESTNET_HUB_INFO } from './evm/config/bsc'
+import { SOLANA_DEVNET_CONFIG, SOLANA_DEVNET_HUB_INFO, SOLANA_MAINNET_CONFIG, SOLANA_MAINNET_HUB_INFO, SOLANA_LOCALNET_CONFIG, SOLANA_LOCALNET_HUB_INFO } from './solana/config'
 import type {
   Addr,
   Arbitrator,
@@ -25,13 +29,17 @@ import type {
   TradeInfo,
 } from '~/types/components.interface'
 import { CosmosChain } from '~/network/cosmos/CosmosChain'
+import { EVMChain } from '~/network/evm/EVMChain'
+// Note: SolanaChain is dynamically imported to avoid SSR issues with @coral-xyz/anchor
 
 export interface Chain {
   init(): void
 
   getName(): string
 
-  connectWallet(): Promise<void>
+  getChainType(): string
+
+  connectWallet(walletType?: any): Promise<void>
 
   disconnectWallet(): Promise<void>
 
@@ -45,11 +53,17 @@ export interface Chain {
 
   fetchOffer(offerId: string): Promise<OfferResponse>
 
+  fetchAllOffers(limit: number, last?: number): Promise<OfferResponse[]>
+
   fetchOffers(args: FetchOffersArgs, limit: number, last?: number): Promise<OfferResponse[]>
 
   fetchMakerOffers(maker: Addr): Promise<OfferResponse[]>
 
   fetchMyOffers(limit: number, last?: number): Promise<OfferResponse[]>
+  
+  fetchOffersCountByStates(states: string[]): Promise<number>
+  
+  fetchAllFiatsOffersCount(states: string[]): Promise<Array<{ fiat: string; count: number }>>
 
   createOffer(postOffer: PostOffer): Promise<number>
 
@@ -58,6 +72,10 @@ export interface Chain {
   openTrade(trade: NewTrade): Promise<number>
 
   fetchTrades(limit: number, last?: number): Promise<TradeInfo[]>
+  
+  fetchTradesCountByStates(states: string[]): Promise<number>
+  
+  fetchAllFiatsTradesCount(states: string[]): Promise<Array<{ fiat: string; count: number }>>
 
   fetchDisputedTrades(limit: number, last?: number): Promise<{ openDisputes: TradeInfo[]; closedDisputes: TradeInfo[] }>
 
@@ -66,6 +84,18 @@ export interface Chain {
   fetchArbitrators(): Promise<Arbitrator[]>
 
   updateFiatPrice(fiat: FiatCurrency, denom: Denom): Promise<DenomFiatPrice>
+  
+  batchUpdateFiatPrices(fiats: FiatCurrency[], denom: Denom): Promise<DenomFiatPrice[]>
+
+  fetchFiatToUsdRate(fiat: FiatCurrency): Promise<number>
+  
+  /**
+   * Format raw fiat price from the chain's price oracle to a standardized format
+   * @param rawPrice The raw price value from the chain (string for EVM, number for Cosmos)
+   * @returns Number of fiat units per 1 USD as a decimal value
+   * Example: Returns 4051.88 for COP (meaning 1 USD = 4051.88 COP)
+   */
+  formatFiatPrice(rawPrice: string | number): number
 
   acceptTradeRequest(tradeId: number, makerContact: string): Promise<void>
 
@@ -93,10 +123,23 @@ export enum ChainClient {
   dev = 'DEV',
   terra = 'TERRA',
   neutron = 'NEUTRON',
+  mantra = 'MANTRA',
+  cosmoshub = 'COSMOSHUB',
+  bscMainnet = 'BSC_MAINNET',
+  bscTestnet = 'BSC_TESTNET',
+  solanaDevnet = 'SOLANA_DEVNET',
+  solanaMainnet = 'SOLANA_MAINNET',
+  solanaLocalnet = 'SOLANA_LOCALNET',
+}
+
+// Helper to check if a chain client is Solana
+export function isSolanaChain(client: ChainClient): boolean {
+  return client === ChainClient.solanaDevnet || client === ChainClient.solanaMainnet || client === ChainClient.solanaLocalnet
 }
 
 // Centralized place to instantiate chain client and inject dependencies if needed
-export function chainFactory(client: ChainClient): Chain {
+// Returns Chain directly for non-Solana chains, or null for Solana chains (use chainFactoryAsync)
+export function chainFactory(client: ChainClient): Chain | null {
   switch (client) {
     case ChainClient.kujiraTestnet:
       return new CosmosChain(KUJIRA_TESTNET_CONFIG, KUJIRA_TESTNET_HUB_INFO)
@@ -110,5 +153,42 @@ export function chainFactory(client: ChainClient): Chain {
       return new CosmosChain(DEV_CONFIG, DEV_HUB_INFO)
     case ChainClient.terra:
       return new CosmosChain(TERRA_CONFIG, TERRA_HUB_INFO)
+    case ChainClient.mantra:
+      return new CosmosChain(MANTRA_CONFIG, MANTRA_HUB_INFO)
+    case ChainClient.cosmoshub:
+      return new CosmosChain(COSMOSHUB_CONFIG, COSMOSHUB_HUB_INFO)
+    case ChainClient.bscMainnet:
+      return new EVMChain(BSC_MAINNET_CONFIG, BSC_MAINNET_HUB_INFO)
+    case ChainClient.bscTestnet:
+      return new EVMChain(BSC_TESTNET_CONFIG, BSC_TESTNET_HUB_INFO)
+    case ChainClient.solanaDevnet:
+    case ChainClient.solanaMainnet:
+    case ChainClient.solanaLocalnet:
+      // Solana chains require async initialization due to dynamic imports
+      // Use chainFactoryAsync for Solana chains
+      return null
+  }
+}
+
+// Async factory for all chains - handles Solana's dynamic import requirement
+export async function chainFactoryAsync(client: ChainClient): Promise<Chain> {
+  // For non-Solana chains, use the sync factory
+  const syncChain = chainFactory(client)
+  if (syncChain) {
+    return syncChain
+  }
+
+  // Dynamically import SolanaChain to avoid SSR issues with @coral-xyz/anchor
+  const { SolanaChain } = await import('~/network/solana/SolanaChain')
+
+  switch (client) {
+    case ChainClient.solanaDevnet:
+      return new SolanaChain(SOLANA_DEVNET_CONFIG, SOLANA_DEVNET_HUB_INFO)
+    case ChainClient.solanaMainnet:
+      return new SolanaChain(SOLANA_MAINNET_CONFIG, SOLANA_MAINNET_HUB_INFO)
+    case ChainClient.solanaLocalnet:
+      return new SolanaChain(SOLANA_LOCALNET_CONFIG, SOLANA_LOCALNET_HUB_INFO)
+    default:
+      throw new Error(`Unknown chain client: ${client}`)
   }
 }

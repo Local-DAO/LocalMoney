@@ -1,6 +1,6 @@
-import Maska from 'maska'
+import { vMaska } from 'maska'
 import { type UserModule } from '~/types'
 
 export const install: UserModule = ({ app }) => {
-  app.use(Maska)
+  app.directive('maska', vMaska)
 }

@@ -19,13 +19,30 @@ const client = useClientStore()
 
 const offerTypeLabels: OfferTypeLabel = { [OfferType.buy]: t('label.sell'), [OfferType.sell]: t('label.buy') }
 const marginRate = computed(() => convertOfferRateToMarginRate(props.offerResponse.offer.rate))
+// Amounts are normalized to micro-units (1e6) across chains
+const decimalPlaces = computed(() => 1000000)
+const minAmountDisplay = computed(() => {
+  const amount = Number(props.offerResponse.offer.min_amount) / decimalPlaces.value
+  return amount.toFixed(6)
+})
+const maxAmountDisplay = computed(() => {
+  const amount = Number(props.offerResponse.offer.max_amount) / decimalPlaces.value
+  return amount.toFixed(6)
+})
 const offerPrice = computed(() => {
   const offer = props.offerResponse.offer
-  const denomFiatPrice = client.fiatPrices.get(offer.fiat_currency)?.get(denomToValue(offer.denom))
-  const fiatPrice = calculateFiatPriceByRate(denomFiatPrice, props.offerResponse.offer.rate) / 100
+  const baseFiatPrice = client.getFiatPrice(offer.fiat_currency, offer.denom)
+  
+  // If no price is available (0), show price unavailable
+  if (baseFiatPrice === 0) {
+    return `${props.offerResponse.offer.fiat_currency} -`
+  }
+  
+  const fiatPrice = calculateFiatPriceByRate(baseFiatPrice * 100, props.offerResponse.offer.rate) / 100
   return `${props.offerResponse.offer.fiat_currency} ${formatAmount(fiatPrice, false)}`
 })
-const tradeCountIcon = computed(() => props.offerResponse.profile.released_trades_count > 0)
+const tradeCountIcon = computed(() => props.offerResponse.profile?.released_trades_count > 0)
+
 </script>
 
 <template>
@@ -38,7 +55,7 @@ const tradeCountIcon = computed(() => props.offerResponse.profile.released_trade
         <svg v-show="tradeCountIcon" class="icon-24" width="24" height="24" viewBox="0 0 24 24" fill="none">
           <path d="M20 6L9 17L4 12" stroke="inherit" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <p>{{ formatTradesCountInfo(offerResponse.profile.released_trades_count) }}</p>
+        <p>{{ formatTradesCountInfo(offerResponse.profile?.released_trades_count || 0) }}</p>
       </div>
     </div>
 
@@ -47,8 +64,8 @@ const tradeCountIcon = computed(() => props.offerResponse.profile.released_trade
         <div class="wrap">
           <p class="label">Trade limit</p>
           <p class="limit">
-            {{ formatAmount(offerResponse.offer.min_amount, true, 6) }} -
-            {{ formatAmount(offerResponse.offer.max_amount, true, 6) }}
+            {{ parseFloat(minAmountDisplay) }} -
+            {{ parseFloat(maxAmountDisplay) }}
             {{ microDenomToDisplay(offerResponse.offer.denom.native, client.chainClient) }}
           </p>
         </div>
@@ -102,13 +119,13 @@ const tradeCountIcon = computed(() => props.offerResponse.profile.released_trade
       gap: 6px;
       margin-top: 8px;
 
-      @include responsive(mobile) {
-        margin-top: 0;
-      }
-
       background-color: $border;
       padding: 4px 8px;
       border-radius: 8px;
+
+      @include responsive(mobile) {
+        margin-top: 0;
+      }
 
       svg {
         width: 16px;

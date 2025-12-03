@@ -1,0 +1,31 @@
+{
+  "name": "@localmoney/solana-contracts",
+  "version": "0.1.0",
+  "description": "LocalMoney Protocol - Solana Implementation",
+  "license": "MIT",
+  "scripts": {
+    "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
+    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "test": "ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'",
+    "e2e:trade": "ts-node --transpile-only scripts/e2e-trade-lifecycle.ts",
+    "e2e:trade:report": "open reports/trade-lifecycle-latest.html"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.31.0",
+    "@solana/spl-token": "^0.4.0",
+    "@solana/web3.js": "^1.95.0"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.0",
+    "@types/chai": "^4.3.0",
+    "@types/mocha": "^9.0.0",
+    "@types/node": "^24.10.1",
+    "chai": "^4.3.4",
+    "chalk": "^4.1.2",
+    "mocha": "^9.0.3",
+    "prettier": "^3.0.0",
+    "ts-mocha": "^10.0.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { useClientStore } from '~/stores/client'
-import { ChainClient } from '~/network/Chain'
 import { Page, trackPage } from '~/analytics/analytics'
 import type { Profile } from '~/types/components.interface'
 import { formatAddress, formatDate, timeSince } from '~/shared'
+import { getExplorerUrl } from '~/utils/explorer'
 
 const client = useClientStore()
 const route = useRoute()
@@ -22,12 +22,8 @@ const createdAt = computed(() => {
   const date = new Date(timestamp * 1000)
   return profile.value ? `${formatDate(date, false, false)}` : 'loading...'
 })
-const finder = computed(() => {
-  if (client.chainClient === ChainClient.kujiraMainnet) {
-    return `kaiyo-1/address/${maker.value}`
-  } else {
-    return `harpoon-4/address/${maker.value}`
-  }
+const explorerUrl = computed(() => {
+  return getExplorerUrl(client.chainClient, maker.value)
 })
 
 onMounted(() => {
@@ -44,7 +40,7 @@ onMounted(() => {
           <div class="maker">
             <h2 class="maker-addr">{{ makerAddr }}</h2>
             <div class="actions">
-              <a :href="`https://finder.kujira.app/${finder}`" target="_blank" alt="Finder link">
+              <a :href="explorerUrl" target="_blank" alt="Explorer link">
                 <svg
                   class="icon-24"
                   width="24"

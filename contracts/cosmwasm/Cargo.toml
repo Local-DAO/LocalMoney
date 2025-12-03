@@ -2,7 +2,46 @@
 members = ["contracts/*", "packages/*"]
 resolver = "2"
 
+[workspace.package]
+authors = ["LocalMoney Development Team"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/desamtralized/local-money"
+publish = false
+
+[workspace.dependencies]
+# Core CosmWasm dependencies
+cosmwasm-schema = { version = "2.1.3" }
+cosmwasm-std = { version = "2.1.3", default-features = true, features = ["cosmwasm_2_1", "stargate"] }
+cosmwasm-vm = { version = "2.1.3" }
+
+# CW packages
+cw-storage-plus = { version = "2.0.0" }
+cw-utils = { version = "2.0.0" }
+cw2 = { version = "2.0.0" }
+cw20 = { version = "2.0.0" }
+cw-ownable = { version = "2.0.0" }
+cw-migrate-error-derive = { version = "0.1.0" }
+cw-multi-test = { version = "2.1.1", features = ["cosmwasm_2_0", "staking", "stargate"] }
+
+# Utility libraries
+thiserror = { version = "1.0.63" }
+schemars = { version = "0.8.21" }
+serde = { version = "1.0.208", default-features = false, features = ["derive"] }
+snafu = { version = "0.7.5" }
+semver = { version = "1.0.23" }
+anyhow = { version = "1.0.86" }
+
+# Local packages
+localmoney-protocol = { path = "packages/protocol" }
+
 [profile.release]
-rpath = false
+codegen-units = 1
+debug = false
+debug-assertions = false
+incremental = false
 lto = true
+opt-level = 3
 overflow-checks = true
+panic = 'abort'
+rpath = false

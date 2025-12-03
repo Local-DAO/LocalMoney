@@ -1,37 +1,11 @@
 [
   {
     "register_price_route_for_denom": {
-      "denom": { "native": "factory/kujira1r85reqy6h0lu02vyz0hnzhv5whsns55gdt4w0d7ft87utzk7u0wqr4ssll/uusk" },
+      "denom": { "native": "ibc/F663521BF1836B00F5F177680F74BFB9A8B5654A694D0D2BC249E03CF2509013" },
       "route": [
         {
-          "pool": "kujira14sa4u42n2a8kmlvj3qcergjhy6g9ps06rzeth94f2y6grlat6u6ssqzgtg",
-          "offer_asset": { "native": "factory/kujira1r85reqy6h0lu02vyz0hnzhv5whsns55gdt4w0d7ft87utzk7u0wqr4ssll/uusk" }
-        }
-      ]
-    }
-  },
-  {
-    "register_price_route_for_denom": {
-      "denom": { "native": "untrn" },
-      "route": [
-        {
-          "pool": "kujira1suhgf5svhu4usrurvxzlgn54ksxmn8gljarjtxqnapv8kjnp4nrsqq4jjh",
-          "offer_asset": { "native": "untrn" }
-        }
-      ]
-    }
-  },
-  {
-    "register_price_route_for_denom": {
-      "denom": { "native": "factory/kujira12w0ua4eqnkk0aahtnjlt6h3dhxael6x25s507w/local" },
-      "route": [
-        {
-          "pool": "kujira1chejx4qqtvwxy6684yrsmf6pylancxqhk3vsmtleg5ta3zrffljq4xf685",
-          "offer_asset": { "native": "factory/kujira12w0ua4eqnkk0aahtnjlt6h3dhxael6x25s507w/local" }
-        },
-        {
-          "pool": "kujira1suhgf5svhu4usrurvxzlgn54ksxmn8gljarjtxqnapv8kjnp4nrsqq4jjh",
-          "offer_asset": { "native": "untrn" }
+          "pool": "cosmos1pool_address_here",
+          "offer_asset": { "native": "ibc/F663521BF1836B00F5F177680F74BFB9A8B5654A694D0D2BC249E03CF2509013" }
         }
       ]
     }

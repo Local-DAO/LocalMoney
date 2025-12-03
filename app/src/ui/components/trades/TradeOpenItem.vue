@@ -6,6 +6,7 @@ import { microDenomToDisplay } from '~/utils/denom'
 import { formatTimer } from '~/utils/formatters'
 import { checkTradeNeedsRefund } from '~/utils/validations'
 import { TradeState } from '~/types/components.interface'
+import { addressesEqual } from '~/utils/address'
 
 const props = defineProps<{ tradeInfo: TradeInfo }>()
 const trade = ref()
@@ -20,7 +21,7 @@ const stepLabels = {
     buyer: [
       'Review trade request',
       'Waiting for funds',
-      'Please make the payment',
+      'Waiting for fiat payment',
       'Waiting for funds release',
       'Trade finished',
       'In dispute',
@@ -37,7 +38,7 @@ const stepLabels = {
   sell: {
     buyer: [
       'Waiting for funds',
-      'Please make the payment',
+      'Waiting for fiat payment',
       'Waiting for funds release',
       'Trade finished',
       'In dispute',
@@ -91,11 +92,11 @@ const step = computed(() => {
 
 const counterparty = computed(() => {
   const trade = props.tradeInfo.trade
-  return walletAddress.value === trade.seller ? trade.buyer : trade.seller
+  return addressesEqual(walletAddress.value, trade.seller) ? trade.buyer : trade.seller
 })
 
 const isBuying = computed(() => {
-  return props.tradeInfo.trade.seller !== walletAddress.value
+  return !addressesEqual(props.tradeInfo.trade.seller, walletAddress.value)
 })
 
 const buyOrSell = computed(() => {
@@ -117,6 +118,84 @@ const stepLabel = computed(() => {
     } else {
       return stepLabels[type].seller[labelIdx]
     }
+  }
+})
+
+const isMyTurn = computed(() => {
+  const trade = props.tradeInfo.trade
+  const offerType = props.tradeInfo.offer.offer.offer_type
+  const userIsBuyer = isBuying.value
+  const userIsSeller = !userIsBuyer
+  
+  // Check for refund needed first
+  if (checkTradeNeedsRefund(trade, walletAddress.value)) {
+    return true
+  }
+  
+  // For BUY offers (maker wants to buy crypto, is the buyer)
+  if (offerType === 'buy') {
+    switch (trade.state) {
+      case 'request_created':
+        return userIsBuyer // Buyer (maker) needs to accept
+      case 'request_accepted':
+        return userIsSeller // Seller (taker) needs to fund
+      case 'escrow_funded':
+        return userIsBuyer // Buyer (maker) needs to mark as paid
+      case 'fiat_deposited':
+        return userIsSeller // Seller (taker) needs to release funds
+      case 'escrow_released':
+      case 'escrow_refunded':
+      case 'request_canceled':
+      case 'request_expired':
+        return false // Trade complete or canceled
+      case 'escrow_disputed':
+        return false // Waiting for arbitrator
+      default:
+        return false
+    }
+  } 
+  // For SELL offers (maker wants to sell crypto, is the seller)
+  else {
+    switch (trade.state) {
+      case 'request_created':
+        // For sell offers, taker initiates, maker (seller) needs to accept
+        return userIsSeller // Seller (maker) needs to accept
+      case 'request_accepted':
+        return userIsSeller // Seller (maker) needs to fund
+      case 'escrow_funded':
+        return userIsBuyer // Buyer (taker) needs to mark as paid
+      case 'fiat_deposited':
+        return userIsSeller // Seller (maker) needs to release funds
+      case 'escrow_released':
+      case 'escrow_refunded':
+      case 'request_canceled':
+      case 'request_expired':
+        return false // Trade complete or canceled
+      case 'escrow_disputed':
+        return false // Waiting for arbitrator
+      default:
+        return false
+    }
+  }
+})
+
+const turnIndicator = computed(() => {
+  if (checkTradeNeedsRefund(props.tradeInfo.trade, walletAddress.value)) {
+    return { isMyTurn: true, text: 'Action required' }
+  }
+  
+  const trade = props.tradeInfo.trade
+  if (['escrow_released', 'escrow_refunded', 'request_canceled', 'request_expired'].includes(trade.state)) {
+    return { isMyTurn: false, text: 'Completed' }
+  }
+  
+  if (trade.state === 'escrow_disputed') {
+    return { isMyTurn: false, text: 'Waiting for arbitrator' }
+  }
+  
+  return {
+    isMyTurn: isMyTurn.value,
+    text: isMyTurn.value ? 'Your turn' : "Waiting for counterparty"
   }
 })
 
@@ -186,6 +265,16 @@ onUnmounted(() => {
           </p>
         </div>
 
+        <div class="divider" />
+
+        <div class="wrap">
+          <p class="label">Turn</p>
+          <p class="content turn-indicator" :class="{ 'my-turn': turnIndicator.isMyTurn, 'their-turn': !turnIndicator.isMyTurn }">
+            <span class="indicator-dot" :class="{ active: turnIndicator.isMyTurn }" />
+            {{ turnIndicator.text }}
+          </p>
+        </div>
+
         <template v-if="tradeInfo.trade.state !== TradeState.request_expired && tradeInfo.trade.expires_at > 0">
           <div class="divider" />
           <div class="wrap">
@@ -228,6 +317,43 @@ onUnmounted(() => {
   }
   p.current-action {
     color: $primary !important;
+  }
+  
+  .turn-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    
+    &.my-turn {
+      color: #10b981; // Green for user's turn
+    }
+    
+    &.their-turn {
+      color: $gray700;
+    }
+    
+    .indicator-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: $gray600;
+      display: inline-block;
+      
+      &.active {
+        background-color: #10b981; // Green dot when it's user's turn
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+    }
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
   }
 }
 </style>

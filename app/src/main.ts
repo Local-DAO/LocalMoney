@@ -1,5 +1,10 @@
+// Polyfill Buffer for Solana libraries (must be first!)
+import { Buffer } from 'buffer'
+if (typeof window !== 'undefined') {
+  window.Buffer = Buffer
+}
+
 import { ViteSSG } from 'vite-ssg'
-import { createWebHistory } from 'vue-router'
 import App from './App.vue'
 import routes from '~/routes'
 
@@ -9,10 +14,10 @@ export const createApp = ViteSSG(
   {
     routes,
     base: import.meta.env.BASE_URL,
-    history: createWebHistory(process.env.BASE_URL),
   },
-  (ctx) => {
+  async (ctx) => {
     // install all modules under `modules/`
-    Object.values(import.meta.globEager('./modules/*.ts')).forEach((i) => i.install?.(ctx))
+    const modules = import.meta.glob('./modules/*.ts', { eager: true })
+    Object.values(modules).forEach((i: any) => i.install?.(ctx))
   }
 )

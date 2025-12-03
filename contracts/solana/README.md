@@ -1,128 +1,304 @@
-😊 Below is a sample README file for the Solana folder:
-
-```markdown:README.md
-# LocalMoney - Solana Programs
+# LocalMoney Protocol - Solana Implementation
 
 ## Overview
 
-This repository contains the Solana programs for the LocalMoney project built with the [Anchor Framework](https://project-serum.github.io/anchor/). The project comprises several interrelated programs:
+LocalMoney P2P trading protocol implemented on Solana using the Anchor framework. This implementation translates the existing EVM and CosmWasm contracts to Solana programs.
 
-- **Price:** A decentralized price oracle for managing currency values.
-- **Offer:** A program to create and manage buy/sell offers.
-- **Trade:** A trading platform that facilitates secure token transfers between buyers and sellers.
-- **Profile:** A user profile management program to track reputation, trade completions, and more.
-- **Common:** Shared utilities and common logic used across the programs.
+## Programs
 
-## Folder Structure
-
-```
-LocalMoney/
- ├── programs/
- │    ├── price
- │    ├── offer
- │    ├── trade
- │    └── profile
- ├── common/ 
- ├── tests/            # Integration tests written in TypeScript
- └── Anchor.toml       # Anchor configuration file
-```
+1. **Hub** (`8xemd2mhu4zi314H6nFTGgXKTVFji4evLSedxKVvk7jH`) - Central configuration and registry
+2. **Profile** (`86KWUvm3YK3fsSqSF1iLCRB2mLmHFcGUozFvD823Npf5`) - User reputation and statistics
+3. **Offer** (`CZR8LiYhioRCc9qYFBfMkQ3JnkgU2PfAD8fMLN5WrNDo`) - Marketplace listing management
+4. **Trade** (`5fRDb9S3Z61fBALmDHNV5EH7GDP8gsCGkQT8eawDL1kE`) - Core P2P exchange logic
+5. **Escrow** (`CfpW1FrK41jj5tv1JRBxgRTqRr7Yeok9HeqnaUMg46VJ`) - Token custody and release
+6. **Arbitrator** (`J5BNGJ128bxHuWemwaoGkDqy8DVSvsA7o5kpdy9eDoNe`) - Dispute resolution system
+7. **Price Oracle** (`CwWd4PCPx85fgREweU3UWWd6kxhtqRVd9xh2iVMT9Rbw`) - Fiat price feeds
 
 ## Prerequisites
 
-Before starting development, ensure you have the following installed:
+### Required Installations
 
-- [Solana CLI](https://docs.solana.com/cli/install-solana-cli-tools)
-- [Anchor CLI](https://project-serum.github.io/anchor/getting-started/installation.html)
-- [Rust](https://www.rust-lang.org/tools/install)
-- [pnpm](https://pnpm.io/installation) — **Note:** Always use pnpm as the package manager.
+1. **Rust** (1.75+)
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   rustup component add rust-src
+   ```
 
-## Local Development
+2. **Solana CLI** (1.18+) - Full toolchain with build tools
+   ```bash
+   sh -c "$(curl -sSfL https://release.solana.com/v1.18.20/install)"
+   export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+   ```
 
-### Starting the Local Validator
+   **Important**: Use the official Solana installer, not Homebrew, as the Homebrew version lacks `cargo-build-sbf`.
 
-To run a local Solana test network, use the following command:
+3. **Anchor CLI** (0.31.0+)
+   ```bash
+   cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+   avm install 0.31.0
+   avm use 0.31.0
+   ```
+
+4. **Node.js** (18+) for TypeScript client
+   ```bash
+   npm install
+   ```
+
+### Verify Installation
 
 ```bash
+solana --version        # Should be 1.18.20+
+anchor --version        # Should be 0.31.0+
+rustc --version         # Should be 1.75+
+cargo build-sbf --help  # Should show help (confirms build tools installed)
+```
+
+## Development
+
+### Build All Programs
+
+```bash
+anchor build
+```
+
+This will compile all 7 programs and generate their respective `.so` files in `target/deploy/`.
+
+### Test
+
+```bash
+# Start local validator (in separate terminal)
 solana-test-validator
+
+# Run tests
+anchor test --skip-local-validator
 ```
 
-A sample output looks like this:
-
-```plaintext
-Ledger location: test-ledger
-Log: test-ledger/validator.log
-Initializing...
-Waiting for fees to stabilize 1...
-Identity: 6eWaCxgWnQXfDftUMtU1GEVcaz1nS8cubPFyv5tgq1VT
-Genesis Hash: A8XqDDkcEBWxCNSpFF8TQeE3i6fXcecwsjur8PXGWLVP
-Version: 1.18.26
-Shred Version: 46456
-Gossip Address: 127.0.0.1:1024
-TPU Address: 127.0.0.1:1027
-JSON RPC URL: http://127.0.0.1:8899
-WebSocket PubSub URL: ws://127.0.0.1:8900
-```
-
-### Environment Configuration
-
-- Create a `.env` file (or update your existing one) with the following variables:
-  - `PRICE_PROGRAM_ID`
-  - `OFFER_PROGRAM_ID`
-  - `TRADE_PROGRAM_ID`
-  - `PROFILE_PROGRAM_ID`
-
-- If any program IDs change after deployment, update them in both the `.env` file and the `Anchor.toml` file.
-
-### Building and Deploying Programs
-
-After making changes to any program:
-
-1. **Build the programs:**
-
-    ```bash
-    anchor build
-    ```
-
-2. **Deploy the programs (ensure you are connected to the localnet):**
-
-    ```bash
-    anchor deploy --provider.cluster localnet
-    ```
-
-3. **Important:** If any program's ID changes during redeployments, update the corresponding entries in `Anchor.toml` and the environment files.
-
-### Running Tests
-
-Integration tests are written in TypeScript (using ts-mocha) and can be run with the provided npm scripts. From the `tests` folder, run:
+### Deploy to Localnet
 
 ```bash
-pnpm run test:price
-pnpm run test:offer
-pnpm run test:trade
+anchor deploy
 ```
 
-Or run all tests with:
+### Deploy to Devnet
 
 ```bash
-pnpm run test:all
+anchor deploy --provider.cluster devnet
 ```
 
-## Additional Notes
+## Project Structure
 
-- **SOL Airdrops:** If a wallet is low on SOL, use the following command to airdrop SOL on the local validator:
+```
+contracts/solana/
+├── Anchor.toml                 # Anchor workspace configuration
+├── Cargo.toml                  # Rust workspace manifest
+├── package.json                # TypeScript dependencies
+├── tsconfig.json               # TypeScript configuration
+├── programs/                   # Solana programs (smart contracts)
+│   ├── hub/
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs          # Program entry point
+│   │       ├── instructions/   # Instruction handlers
+│   │       ├── state/          # Account structures
+│   │       └── errors.rs       # Custom errors
+│   ├── profile/
+│   ├── offer/
+│   ├── trade/
+│   ├── escrow/
+│   ├── arbitrator/
+│   └── price_oracle/
+├── tests/                      # Integration tests
+│   ├── hub.ts
+│   ├── profile.ts
+│   ├── integration/
+│   └── utils/
+├── migrations/                 # Deployment scripts
+│   └── deploy.ts
+└── target/                     # Build artifacts
+    └── deploy/                 # Compiled .so files
+```
 
-    ```bash
-    solana airdrop 111 <WALLET_ADDRESS>
-    ```
+## Architecture
 
-- **Localnet for Testing:** Always use the Solana localnet (`solana-test-validator`) when testing changes locally.
+### Key Differences from EVM/CosmWasm
 
-- **IDL Files:** Do not modify the generated IDL files manually. They are auto-generated at program compilation and serve as references for front-end development.
+| Aspect | EVM/CosmWasm | Solana |
+|--------|--------------|--------|
+| **Account Model** | Contract storage inside contract | Data in separate accounts owned by program |
+| **Upgradability** | Proxy patterns | Built-in via `solana program deploy` |
+| **Access Control** | Role-based modifiers | Signer checks + PDA ownership |
+| **Token Standards** | ERC-20/CW20 | SPL Token / Token-2022 |
+| **Fee Handling** | `msg.value` / Coin arrays | Explicit token account transfers via CPI |
 
-- **Rebuild and Redeploy:** Every time you make changes to a program, remember to rebuild and redeploy it to keep the deployment in sync with the latest changes.
+### Program Derived Addresses (PDAs)
+
+Programs use deterministic PDAs for account addressing:
+
+- **Hub Config**: `[b"hub_config"]`
+- **User Profile**: `[b"profile", user_pubkey]`
+- **Offer**: `[b"offer", offer_id]`
+- **Trade**: `[b"trade", trade_id]`
+- **Escrow Vault**: `[b"escrow_vault", trade_id]`
+
+### Cross-Program Invocations (CPIs)
+
+Programs communicate via CPIs:
+- Trade → Offer (verify offer status)
+- Trade → Escrow (lock/release funds)
+- Escrow → SPL Token (transfer tokens)
+- All → Hub (read configuration)
+- Offer/Trade → Profile (update statistics)
+
+## Configuration
+
+### Hub Configuration
+
+The Hub program stores global configuration accessible to all programs:
+
+- **Program Addresses**: Registry of all protocol programs
+- **Fee Configuration**: Burn, chain, warchest, conversion, arbitration fees (basis points)
+- **Trading Limits**: Min/max trade amounts, active offer/trade limits
+- **Timers**: Trade expiration and dispute windows
+- **Circuit Breakers**: Global pause and operation-specific pauses
+
+### Fee Structure
+
+All fees are in basis points (1% = 100 basis points):
+- Max total fees: 10% (1000 basis points)
+- Burn fee: 0-5%
+- Chain fee: 0-3%
+- Warchest fee: 0-3%
+- Conversion fee: 0-5%
+- Arbitration fee: 0-2%
+
+## Development Workflow
+
+### 1. Make Changes
+
+Edit program source code in `programs/*/src/`
+
+### 2. Build
+
+```bash
+anchor build
+```
+
+### 3. Update Program IDs
+
+If you regenerated keypairs:
+
+```bash
+anchor keys list
+# Copy program IDs to lib.rs declare_id!() and Anchor.toml
+```
+
+### 4. Test
+
+```bash
+# Unit tests (Rust)
+cargo test --package hub -- --nocapture
+
+# Integration tests (TypeScript)
+anchor test
+```
+
+### 5. Deploy
+
+```bash
+# Localnet
+anchor deploy
+
+# Devnet
+anchor deploy --provider.cluster devnet
+```
+
+## Testing Strategy
+
+### Unit Tests (Rust)
+
+Located in each program's `src/` directory:
+- Test individual instruction handlers
+- Test account validation
+- Test custom error conditions
+- Test fee calculations
+
+### Integration Tests (TypeScript)
+
+Located in `tests/`:
+- Test complete user flows
+- Test cross-program interactions
+- Test state transitions
+- Test error propagation
+
+### Test Coverage Goals
+
+- Unit tests: >90% per program
+- Integration tests: All happy paths + critical error paths
+- Edge cases: Zero amounts, max values, boundary conditions
+
+## Security Considerations
+
+### Validation Requirements
+
+- ✅ All inputs validated
+- ✅ Authorization checks on state-changing instructions
+- ✅ PDA ownership verified
+- ✅ Token amounts validated before transfers
+- ✅ Integer overflow protection via checked arithmetic
+- ✅ Rent exemption enforced for all accounts
+
+### Access Control
+
+- Admin operations require Hub admin signature
+- User operations require user signature
+- Cross-program calls validate caller program ID
+- PDA authorities prevent unauthorized access
+
+### Common Pitfalls (Documented in PRP)
+
+1. **Account Size Limits**: Keep accounts <10KB
+2. **Compute Units**: Max 200k CU per instruction
+3. **PDA Seeds**: Must be deterministic and unique
+4. **Fee Precision**: Use basis points to avoid rounding errors
+5. **Escrow Security**: Only Trade program can trigger releases
+
+## Troubleshooting
+
+### Build Errors
+
+**Error**: `cargo build-sbf` not found
+- **Solution**: Install full Solana toolchain (not Homebrew version)
+  ```bash
+  sh -c "$(curl -sSfL https://release.solana.com/v1.18.20/install)"
+  ```
+
+**Error**: Program ID mismatch
+- **Solution**: Run `anchor keys list` and update `declare_id!()` in lib.rs
+
+### Test Failures
+
+**Error**: Account not found
+- **Solution**: Ensure local validator is running with correct program deployments
+
+**Error**: Transaction too large
+- **Solution**: Split complex operations across multiple transactions
 
 ## Contributing
 
-Contributions are welcome! If you find issues or have improvements, please open an issue or submit a pull request.
+1. Follow Rust naming conventions (snake_case)
+2. Add doc comments to all public functions
+3. Write tests for all new functionality
+4. Run `cargo fmt` and `cargo clippy` before committing
+5. Update this README for new features
 
-```
+## License
+
+MIT License - See LICENSE file
+
+## References
+
+- [Anchor Documentation](https://www.anchor-lang.com/docs)
+- [Solana Documentation](https://solana.com/docs)
+- [EVM Contracts](../evm/contracts/)
+- [CosmWasm Contracts](../cosmwasm/contracts/)
+- [PRP Document](../../PRPs/solana-protocol-conversion.md)

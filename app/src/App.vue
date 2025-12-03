@@ -8,7 +8,17 @@ import './ui/style/reset.scss'
 import 'vue-toastification/dist/index.css'
 
 const client = useClientStore()
-client.setClient(ChainClient.neutron) // required to properly init chain
+// Default chain based on environment variable, falling back to Solana Devnet
+const getDefaultChain = (): ChainClient => {
+  const envChain = import.meta.env.VITE_DEFAULT_CHAIN
+  if (envChain && Object.values(ChainClient).includes(envChain)) {
+    return envChain as ChainClient
+  }
+  // Default to Solana Devnet for dev mode, BSC Mainnet for production
+  return import.meta.env.DEV ? ChainClient.solanaDevnet : ChainClient.bscMainnet
+}
+const defaultChain = getDefaultChain()
+client.setClient(defaultChain) // required to properly init chain
 const loading = computed(() => client.loadingState)
 
 let title: string
@@ -22,8 +32,10 @@ switch (client.chainClient) {
   case ChainClient.neutron:
     title = 'Local Money - powered by Neutron'
     break
+  case ChainClient.bscMainnet:
+    title = 'Local Money - BNB Chain'
   default:
-    title = 'Local Money - TESTNET'
+    title = 'Local Money'
     break
 }
 

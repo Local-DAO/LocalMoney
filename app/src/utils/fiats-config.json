@@ -58,5 +58,45 @@
     "icon": "/flags/ves.png",
     "display": "VES",
     "code": "VES"
+  },
+  "IDR": {
+    "icon": "/flags/idr.png",
+    "display": "IDR",
+    "code": "IDR"
+  },
+  "PHP": {
+    "icon": "/flags/php.png",
+    "display": "PHP",
+    "code": "PHP"
+  },
+  "VND": {
+    "icon": "/flags/vnd.png",
+    "display": "VND",
+    "code": "VND"
+  },
+  "MYR": {
+    "icon": "/flags/myr.png",
+    "display": "MYR",
+    "code": "MYR"
+  },
+  "SGD": {
+    "icon": "/flags/sgd.png",
+    "display": "SGD",
+    "code": "SGD"
+  },
+  "ZAR": {
+    "icon": "/flags/zar.png",
+    "display": "ZAR",
+    "code": "ZAR"
+  },
+  "EGP": {
+    "icon": "/flags/egp.png",
+    "display": "EGP",
+    "code": "EGP"
+  },
+  "KES": {
+    "icon": "/flags/kes.png",
+    "display": "KES",
+    "code": "KES"
   }
 }

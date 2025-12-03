@@ -59,18 +59,37 @@ const stepTwoChecked = computed(() => {
 const stepThreeChecked = computed(() => {
   return ['escrow_released', 'settled_for_taker', 'settled_for_maker'].includes(tradeInfo.value.trade.state)
 })
-const isBuyer = computed(() => tradeInfo.value.trade.buyer === walletAddress.value)
+const isBuyer = computed(() => tradeInfo.value.trade.buyer?.toLowerCase() === walletAddress.value?.toLowerCase())
 const counterparty = computed(() => {
   const trade = tradeInfo.value.trade
-  return walletAddress.value === trade.seller ? trade.buyer : trade.seller
+  return walletAddress.value?.toLowerCase() === trade.seller?.toLowerCase() ? trade.buyer : trade.seller
 })
 const fiatCurrency = computed(() => tradeInfo.value.offer.offer.fiat_currency)
-const denomFiatPrice = computed(() => tradeInfo.value.trade.denom_fiat_price / 100)
+const denomFiatPrice = computed(() => {
+  // First check if trade already has the price set (EVM chains set this)
+  if (tradeInfo.value?.trade?.denom_fiat_price && tradeInfo.value.trade.denom_fiat_price > 0) {
+    return tradeInfo.value.trade.denom_fiat_price / 1000000
+  }
+  
+  // Otherwise calculate from market price and offer rate
+  const denom = tradeInfo.value?.trade?.denom || tradeInfo.value?.offer?.offer?.denom
+  const fiat = fiatCurrency.value
+  const offerRate = parseInt(tradeInfo.value?.offer?.offer?.rate || '100')
+  
+  // Get market price from client store (stored as cents)
+  const marketPriceCents = client.fiatPrices.get(fiat)?.get(denomToValue(denom)) || 0
+  const marketPrice = marketPriceCents / 100 // Convert from cents to actual price
+  
+  // Apply the offer rate (e.g., 105 = 5% above market, 95 = 5% below market)
+  const actualPrice = marketPrice * (offerRate / 100)
+  
+  return actualPrice
+})
 const offerPrice = computed(() => `${fiatCurrency.value} ${formatAmount(denomFiatPrice.value, false)}`)
 const fiatAmountStr = computed(() => {
-  const fiatAmount = formatFiatAmount(
-    (parseInt(tradeInfo.value.trade.amount) / 1000000) * (tradeInfo.value.trade.denom_fiat_price / 100)
-  )
+  const tradeAmountMicro = parseInt(tradeInfo.value?.trade?.amount || '0')
+  const tradeAmount = tradeAmountMicro / 1_000_000
+  const fiatAmount = formatFiatAmount(tradeAmount * denomFiatPrice.value)
   return `${fiatCurrency.value} ${fiatAmount}`
 })
 const marginRate = computed(() => convertOfferRateToMarginRate(tradeInfo.value.offer.offer.rate))
@@ -89,21 +108,21 @@ const counterpartyContact = asyncComputed(async () => {
 })
 
 const isArbitrator = computed(() => {
-  return client.arbitrators.data.filter((a) => client.userWallet.address === a.arbitrator).length > 0
+  return client.arbitrators.data.filter((a) => client.userWallet.address?.toLowerCase() === a.arbitrator?.toLowerCase()).length > 0
 })
 
 const maker = computed(() => {
   return tradeInfo.value.offer.offer.owner
 })
 
-const isMaker = computed(() => tradeInfo.value.offer.offer.owner === walletAddress.value)
+const isMaker = computed(() => tradeInfo.value.offer.offer.owner?.toLowerCase() === walletAddress.value?.toLowerCase())
 
 const taker = computed(() => {
-  return tradeInfo.value.trade.buyer === maker ? tradeInfo.value.trade.seller : tradeInfo.value.trade.buyer
+  return tradeInfo.value.trade.buyer?.toLowerCase() === maker.value?.toLowerCase() ? tradeInfo.value.trade.seller : tradeInfo.value.trade.buyer
 })
 const contactsForArbitrator = computed(() => {
-  const makerContact = tradeInfo.value.trade.buyer === maker.value ? buyerContact.value : sellerContact.value
-  const takerContact = tradeInfo.value.trade.seller === maker.value ? buyerContact.value : sellerContact.value
+  const makerContact = tradeInfo.value.trade.buyer?.toLowerCase() === maker.value?.toLowerCase() ? buyerContact.value : sellerContact.value
+  const takerContact = tradeInfo.value.trade.seller?.toLowerCase() === maker.value?.toLowerCase() ? buyerContact.value : sellerContact.value
   return {
     makerContact,
     takerContact,
@@ -111,22 +130,27 @@ const contactsForArbitrator = computed(() => {
 })
 
 const summary = computed(() => {
-  const trade_amount: number = tradeInfo.value.trade.amount
+  // Parse trade amount (it's in micro units, need to divide by 1e6 for display)
+  const trade_amount_raw = parseInt(tradeInfo.value.trade.amount) || 0
+  const trade_amount = trade_amount_raw / 1_000_000  // Convert from micro units
   const trade_denom = microDenomToDisplay(denomToValue(tradeInfo.value.trade.denom), client.chainClient)
 
   const { warchest_fee_pct, burn_fee_pct, chain_fee_pct, arbitration_fee_pct } = client.getHubConfig()
-  const warchest_fee_value = Math.floor(warchest_fee_pct * trade_amount)
-  const burn_fee_value = Math.floor(burn_fee_pct * trade_amount)
-  const chain_fee_value = Math.floor(chain_fee_pct * trade_amount)
+  
+  // Calculate fees based on raw amount
+  const warchest_fee_value = Math.floor(warchest_fee_pct * trade_amount_raw) / 1_000_000
+  const burn_fee_value = Math.floor(burn_fee_pct * trade_amount_raw) / 1_000_000
+  const chain_fee_value = Math.floor(chain_fee_pct * trade_amount_raw) / 1_000_000
 
   let platform_fee_pct = Number(warchest_fee_pct) + Number(burn_fee_pct) + Number(chain_fee_pct)
   platform_fee_pct = Number(platform_fee_pct.toFixed(5))
   const platform_fee_value = warchest_fee_value + burn_fee_value + chain_fee_value
 
-  const arbitration_fee_value = Math.floor(arbitration_fee_pct * trade_amount)
+  const arbitration_fee_value = Math.floor(arbitration_fee_pct * trade_amount_raw) / 1_000_000
 
   return {
     trade_amount,
+    trade_amount_raw,
     trade_denom,
     platform_fee_pct,
     platform_fee_value,
@@ -140,6 +164,7 @@ function startTradeTimer() {
 }
 
 function tradeTimerTick() {
+  if (!tradeInfo.value?.trade?.expires_at) return
   const currentTime = Date.now()
   const expiresAt = tradeInfo.value.trade.expires_at * 1000
   const timer = new Date(expiresAt - currentTime)
@@ -153,6 +178,29 @@ function stopTradeTimer() {
 function fetchTrade(id: number) {
   nextTick(async () => {
     tradeInfo.value = await client.fetchTradeDetail(id)
+    
+    // Always fetch market price for accurate display
+    if (tradeInfo.value) {
+      const denom = tradeInfo.value.trade.denom || tradeInfo.value.offer.offer.denom
+      const fiat = tradeInfo.value.offer.offer.fiat_currency
+      
+      // Always fetch to ensure we have the latest price
+      try {
+        const priceResult = await client.fetchFiatPriceForDenom(fiat, denom)
+        console.log('Fetched price for trade detail:', priceResult)
+        
+        // If the trade doesn't have a price set and we fetched one, update it
+        if ((!tradeInfo.value.trade.denom_fiat_price || tradeInfo.value.trade.denom_fiat_price === 0) && priceResult?.price) {
+          // Use the fetched price directly (it's already formatted correctly)
+          const formattedPrice = client.client.formatFiatPrice(priceResult.price)
+          tradeInfo.value.trade.denom_fiat_price = Math.round(formattedPrice * 1_000_000)
+          console.log('Updated trade denom_fiat_price to:', tradeInfo.value.trade.denom_fiat_price)
+        }
+      } catch (error) {
+        console.error('Failed to fetch price for trade detail:', error)
+      }
+    }
+    
     refreshInterval = setInterval(async () => {
       tradeInfo.value = await client.fetchTradeDetail(id)
     }, 10 * 1000)
@@ -186,7 +234,7 @@ watch(userWallet, async () => {
 <template>
   <main v-if="tradeInfo" class="page">
     <div class="wrap-title">
-      <h3 v-if="tradeInfo.trade.arbitrator === walletAddress">
+      <h3 v-if="tradeInfo.trade.arbitrator?.toLowerCase() === walletAddress?.toLowerCase()">
         <template v-if="tradeInfo.trade.state === 'escrow_disputed'">Dispute in progress</template>
         <template v-if="tradeInfo.trade.state === 'settled_for_taker'">Dispute settled for taker</template>
         <template v-if="tradeInfo.trade.state === 'settled_for_maker'">Dispute settled for maker</template>
@@ -354,14 +402,6 @@ watch(userWallet, async () => {
             </a>
           </div>
         </div>
-        <div class="wrap-notify">
-          <div class="wrap-content">
-            <div class="pill">new!</div>
-            <p class="content">Get notifications on Telegram using SeaShanty bot.</p>
-          </div>
-          <a class="btn" href="https://t.me/KujiraNotification_bot" target="_blank">register new alert</a>
-          <p class="footer">powered by <a href="https://twitter.com/Capybara_Labs" target="_blank">Capybara Labs</a></p>
-        </div>
       </div>
       <!-- End ChatboxStates -->
 
@@ -379,13 +419,26 @@ watch(userWallet, async () => {
                 <p class="mkt-rate">{{ marginRate.marginOffset }}% {{ marginRate.margin }} market</p>
                 <p class="price">{{ offerPrice }}</p>
               </div>
+              <p class="label">Trade participants</p>
+              <div class="traders-info-simple">
+                <div class="trader-item">
+                  <span class="trader-label">Maker:</span>
+                  <span class="trader-address">{{ formatAddress(maker) }}</span>
+                  <span v-if="isMaker" class="trader-badge">(You)</span>
+                </div>
+                <div class="trader-item">
+                  <span class="trader-label">Taker:</span>
+                  <span class="trader-address">{{ formatAddress(taker) }}</span>
+                  <span v-if="!isMaker" class="trader-badge">(You)</span>
+                </div>
+              </div>
               <p class="label">Transaction summary</p>
               <div class="transaction">
                 <div class="list-item">
                   <p v-if="isBuyer" class="list-item-label">Buying</p>
                   <p v-else class="list-item-label">Selling</p>
                   <p class="value">
-                    {{ formatAmount(summary.trade_amount, true, 6) }}
+                    {{ formatAmount(summary.trade_amount * 1_000_000, true, 6) }}
                     {{ summary.trade_denom }}
                   </p>
                 </div>
@@ -394,7 +447,7 @@ watch(userWallet, async () => {
                 <div class="list-item">
                   <p>Platform fee ( {{ summary.platform_fee_pct * 100 }}% )</p>
                   <p class="value">
-                    {{ formatAmount(summary.platform_fee_value, true, 6) }}
+                    {{ formatAmount(summary.platform_fee_value * 1_000_000, true, 6) }}
                     {{ summary.trade_denom }}
                   </p>
                 </div>
@@ -403,7 +456,7 @@ watch(userWallet, async () => {
                 <div class="list-item">
                   <p>Dispute fee ( {{ summary.arbitration_fee_pct * 100 }}% )</p>
                   <p class="value">
-                    {{ formatAmount(summary.arbitration_fee_value, true, 6) }}
+                    {{ formatAmount(summary.arbitration_fee_value * 1_000_000, true, 6) }}
                     {{ summary.trade_denom }}
                   </p>
                 </div>
@@ -414,7 +467,7 @@ watch(userWallet, async () => {
                   <p class="value total">
                     {{
                       formatAmount(
-                        summary.trade_amount - summary.platform_fee_value - summary.arbitration_fee_value,
+                        (summary.trade_amount - summary.platform_fee_value - summary.arbitration_fee_value) * 1_000_000,
                         true,
                         6
                       )
@@ -441,13 +494,26 @@ watch(userWallet, async () => {
                   {{ offerPrice }}
                 </p>
               </div>
+              <p class="label">Trade participants</p>
+              <div class="traders-info-simple">
+                <div class="trader-item">
+                  <span class="trader-label">Maker:</span>
+                  <span class="trader-address">{{ formatAddress(maker) }}</span>
+                  <span v-if="isMaker" class="trader-badge">(You)</span>
+                </div>
+                <div class="trader-item">
+                  <span class="trader-label">Taker:</span>
+                  <span class="trader-address">{{ formatAddress(taker) }}</span>
+                  <span v-if="!isMaker" class="trader-badge">(You)</span>
+                </div>
+              </div>
               <p class="label">Transaction summary</p>
               <div class="transaction">
                 <div class="list-item">
                   <p v-if="isBuyer" class="list-item-label">Buying</p>
                   <p v-else class="list-item-label">Selling</p>
                   <p class="value">
-                    {{ formatAmount(summary.trade_amount, true, 6) }}
+                    {{ formatAmount(summary.trade_amount * 1_000_000, true, 6) }}
                     {{ summary.trade_denom }}
                   </p>
                 </div>
@@ -456,7 +522,7 @@ watch(userWallet, async () => {
                 <div v-if="isMaker" class="list-item">
                   <p>Platform fee ( {{ summary.platform_fee_pct * 100 }}% )</p>
                   <p class="value">
-                    {{ formatAmount(summary.platform_fee_value, true, 6) }}
+                    {{ formatAmount(summary.platform_fee_value * 1_000_000, true, 6) }}
                     {{ summary.trade_denom }}
                   </p>
                 </div>
@@ -464,11 +530,11 @@ watch(userWallet, async () => {
                 <div v-if="isMaker" class="list-item">
                   <p>Total</p>
                   <p v-if="isBuyer" class="value">
-                    {{ formatAmount(Number(summary.trade_amount) - Number(summary.platform_fee_value), true, 6) }}
+                    {{ formatAmount((summary.trade_amount - summary.platform_fee_value) * 1_000_000, true, 6) }}
                     {{ summary.trade_denom }}
                   </p>
                   <p v-else class="value">
-                    {{ formatAmount(Number(summary.trade_amount) + Number(summary.platform_fee_value), true, 6) }}
+                    {{ formatAmount((summary.trade_amount + summary.platform_fee_value) * 1_000_000, true, 6) }}
                     {{ summary.trade_denom }}
                   </p>
                 </div>
@@ -522,7 +588,7 @@ watch(userWallet, async () => {
                   <p v-if="tradeInfo.offer.offer_type === 'sell'" class="list-item-label">Maker is selling</p>
                   <p v-else class="list-item-label">Maker is buying</p>
                   <p class="value">
-                    {{ formatAmount(tradeInfo.trade.amount, true, 6) }}
+                    {{ formatAmount(summary.trade_amount * 1_000_000, true, 6) }}
                     {{ summary.trade_denom }}
                   </p>
                 </div>
@@ -769,59 +835,6 @@ h3 {
       }
     }
   }
-  .wrap-notify {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    bottom: 0;
-    border-top: 1px solid $border;
-    padding-top: 16px;
-
-    .wrap-content {
-      width: 100%;
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 16px;
-
-      .pill {
-        padding: 4px 10px;
-        background-color: $border;
-        border-radius: 56px;
-        color: $primary;
-        font-size: 12px;
-      }
-      .content {
-        font-size: 14px;
-        color: $gray700;
-        padding-right: 24px;
-      }
-    }
-    .btn {
-      width: 100%;
-      text-align: center;
-      background-color: $border;
-      color: $base-text;
-      font-weight: $semi-bold;
-      text-decoration: none;
-      padding: 8px 16px;
-      margin-top: 8px;
-      border-radius: 8px;
-    }
-    .footer {
-      font-size: 12px;
-      color: $gray600;
-      margin-top: 4px;
-
-      a {
-        color: $gray600;
-        text-decoration: underline;
-      }
-    }
-  }
 }
 
 .summary {
@@ -884,6 +897,45 @@ h3 {
       .price {
         font-size: 16px;
         font-weight: $semi-bold;
+      }
+    }
+
+    .traders-info-simple {
+      background-color: $gray150;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+
+      .trader-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+
+        &:last-child {
+          margin-bottom: 0;
+        }
+
+        .trader-label {
+          font-size: 14px;
+          color: $gray700;
+          min-width: 50px;
+        }
+
+        .trader-address {
+          font-size: 14px;
+          font-weight: $semi-bold;
+          color: $base-text;
+        }
+
+        .trader-badge {
+          font-size: 12px;
+          color: $primary;
+          font-weight: $semi-bold;
+          padding: 2px 8px;
+          background-color: rgba($primary, 0.1);
+          border-radius: 4px;
+        }
       }
     }
 

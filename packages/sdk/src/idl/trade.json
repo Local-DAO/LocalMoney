@@ -1,0 +1,3579 @@
+{
+  "address": "5fRDb9S3Z61fBALmDHNV5EH7GDP8gsCGkQT8eawDL1kE",
+  "metadata": {
+    "name": "trade",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "LocalMoney Trade Program - Core P2P exchange logic"
+  },
+  "instructions": [
+    {
+      "name": "accept_trade",
+      "docs": [
+        "Accept a trade request",
+        "",
+        "Seller accepts a buyer's trade request.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - AcceptTrade context with trade PDA, seller, offer",
+        "* `params` - Seller's encrypted contact info",
+        "",
+        "# Access Control",
+        "",
+        "Only the offer owner (seller) can accept the trade.",
+        "",
+        "# State Transition",
+        "",
+        "RequestCreated → RequestAccepted"
+      ],
+      "discriminator": [
+        139,
+        218,
+        29,
+        95,
+        124,
+        75,
+        64,
+        116
+      ],
+      "accounts": [
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.id",
+                "account": "Trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seller",
+          "docs": [
+            "The seller accepting the trade (must be offer owner)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "offer",
+          "docs": [
+            "The offer being traded"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "AcceptTradeParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "cancel_trade",
+      "docs": [
+        "Cancel trade request",
+        "",
+        "Cancels a trade before escrow is funded.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - CancelTrade context with trade PDA, canceler",
+        "",
+        "# Access Control",
+        "",
+        "Buyer or seller can cancel before escrow is funded.",
+        "",
+        "# State Transition",
+        "",
+        "RequestCreated → RequestCanceled",
+        "RequestAccepted → RequestCanceled",
+        "",
+        "# Security",
+        "",
+        "- Only allowed before escrow is funded",
+        "- Decrements active_trades counter"
+      ],
+      "discriminator": [
+        124,
+        66,
+        91,
+        59,
+        175,
+        107,
+        208,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.id",
+                "account": "Trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "canceler",
+          "docs": [
+            "The party canceling (buyer or seller)"
+          ],
+          "signer": true
+        },
+        {
+          "name": "buyer_profile",
+          "docs": [
+            "Buyer's profile (for counter update)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.buyer",
+                "account": "Trade"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                105,
+                94,
+                163,
+                210,
+                170,
+                223,
+                187,
+                115,
+                217,
+                215,
+                124,
+                81,
+                110,
+                1,
+                242,
+                150,
+                89,
+                140,
+                163,
+                16,
+                66,
+                9,
+                127,
+                184,
+                47,
+                113,
+                40,
+                9,
+                161,
+                128,
+                22,
+                4
+              ]
+            }
+          }
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config for CPI authorization"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        },
+        {
+          "name": "profile_program",
+          "docs": [
+            "Profile program for CPI"
+          ],
+          "address": "86KWUvm3YK3fsSqSF1iLCRB2mLmHFcGUozFvD823Npf5"
+        },
+        {
+          "name": "trade_program",
+          "docs": [
+            "The Trade program account for CPI caller identification"
+          ],
+          "address": "5fRDb9S3Z61fBALmDHNV5EH7GDP8gsCGkQT8eawDL1kE"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "check_expiration",
+      "docs": [
+        "Check and mark trade as expired",
+        "",
+        "Marks a trade as expired if the expiration timer has passed.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - CheckExpiration context with trade PDA",
+        "",
+        "# Access Control",
+        "",
+        "Anyone can call this to mark expired trades.",
+        "",
+        "# State Transition",
+        "",
+        "RequestCreated → RequestExpired (if expired)",
+        "RequestAccepted → RequestExpired (if expired)",
+        "",
+        "# Security",
+        "",
+        "- Only transitions if current timestamp > expires_at",
+        "- Decrements active_trades counter"
+      ],
+      "discriminator": [
+        122,
+        212,
+        47,
+        173,
+        187,
+        251,
+        179,
+        7
+      ],
+      "accounts": [
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.id",
+                "account": "Trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer_profile",
+          "docs": [
+            "Buyer's profile (for counter update if expired)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.buyer",
+                "account": "Trade"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                105,
+                94,
+                163,
+                210,
+                170,
+                223,
+                187,
+                115,
+                217,
+                215,
+                124,
+                81,
+                110,
+                1,
+                242,
+                150,
+                89,
+                140,
+                163,
+                16,
+                66,
+                9,
+                127,
+                184,
+                47,
+                113,
+                40,
+                9,
+                161,
+                128,
+                22,
+                4
+              ]
+            }
+          }
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config for CPI authorization"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        },
+        {
+          "name": "profile_program",
+          "docs": [
+            "Profile program for CPI"
+          ],
+          "address": "86KWUvm3YK3fsSqSF1iLCRB2mLmHFcGUozFvD823Npf5"
+        },
+        {
+          "name": "trade_program",
+          "docs": [
+            "The Trade program account for CPI caller identification"
+          ],
+          "address": "5fRDb9S3Z61fBALmDHNV5EH7GDP8gsCGkQT8eawDL1kE"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "confirm_fiat_deposit",
+      "docs": [
+        "Confirm fiat payment deposited",
+        "",
+        "Buyer confirms they have received the off-chain fiat payment.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - ConfirmFiatDeposit context with trade PDA, buyer",
+        "",
+        "# Access Control",
+        "",
+        "Only the buyer can confirm fiat deposit.",
+        "",
+        "# State Transition",
+        "",
+        "EscrowFunded → FiatDeposited"
+      ],
+      "discriminator": [
+        110,
+        188,
+        71,
+        79,
+        207,
+        9,
+        159,
+        22
+      ],
+      "accounts": [
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.id",
+                "account": "Trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "docs": [
+            "The buyer confirming fiat payment"
+          ],
+          "signer": true,
+          "relations": [
+            "trade"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_trade",
+      "docs": [
+        "Create a new trade request",
+        "",
+        "Creates a trade request against an existing offer.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - CreateTrade context with trade PDA, counter, offer, buyer, profiles, hub config",
+        "* `params` - Trade parameters (offer_id, amount, fiat_amount, contact info)",
+        "",
+        "# Access Control",
+        "",
+        "Anyone can create a trade, subject to limits from Hub config.",
+        "",
+        "# State Transition",
+        "",
+        "Initial state: RequestCreated",
+        "",
+        "# Security",
+        "",
+        "- Validates offer exists and is Active",
+        "- Checks amount within offer's min/max range",
+        "- Enforces max_active_trades limit via Profile CPI",
+        "- Sets expiration timer from Hub config"
+      ],
+      "discriminator": [
+        183,
+        82,
+        24,
+        245,
+        248,
+        30,
+        204,
+        246
+      ],
+      "accounts": [
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "counter.next_id",
+                "account": "TradeCounter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "offer",
+          "docs": [
+            "The offer being responded to"
+          ]
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "buyer_profile",
+          "docs": [
+            "Buyer's profile (for limit checking and counter update)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                105,
+                94,
+                163,
+                210,
+                170,
+                223,
+                187,
+                115,
+                217,
+                215,
+                124,
+                81,
+                110,
+                1,
+                242,
+                150,
+                89,
+                140,
+                163,
+                16,
+                66,
+                9,
+                127,
+                184,
+                47,
+                113,
+                40,
+                9,
+                161,
+                128,
+                22,
+                4
+              ]
+            }
+          }
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config (for trade limits and expiration timer)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        },
+        {
+          "name": "escrow_vault",
+          "docs": [
+            "Escrow vault PDA (will be derived and passed in)"
+          ]
+        },
+        {
+          "name": "profile_program",
+          "docs": [
+            "Profile program for CPI"
+          ],
+          "address": "86KWUvm3YK3fsSqSF1iLCRB2mLmHFcGUozFvD823Npf5"
+        },
+        {
+          "name": "trade_program",
+          "docs": [
+            "The Trade program account for CPI caller identification"
+          ],
+          "address": "5fRDb9S3Z61fBALmDHNV5EH7GDP8gsCGkQT8eawDL1kE"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "CreateTradeParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "fund_escrow",
+      "docs": [
+        "Fund escrow with tokens",
+        "",
+        "The appropriate party (buyer or seller, depending on offer type) deposits",
+        "tokens into the escrow vault.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - FundEscrow context with trade PDA, funder, token accounts, escrow vault",
+        "",
+        "# Access Control",
+        "",
+        "- For Buy offers: seller funds escrow",
+        "- For Sell offers: buyer funds escrow",
+        "",
+        "# State Transition",
+        "",
+        "RequestAccepted → EscrowFunded",
+        "",
+        "# Security",
+        "",
+        "- Validates funder is correct party based on offer type",
+        "- Transfers exact trade amount to escrow vault"
+      ],
+      "discriminator": [
+        155,
+        18,
+        218,
+        141,
+        182,
+        213,
+        69,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.id",
+                "account": "Trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "funder",
+          "docs": [
+            "The party funding escrow (buyer or seller depending on offer type)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "funder_token_account",
+          "docs": [
+            "Funder's token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "escrow_vault",
+          "docs": [
+            "Escrow vault PDA (will be initialized by escrow program via CPI)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault_token_account",
+          "docs": [
+            "Escrow vault's token account (ATA controlled by vault PDA)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_mint",
+          "docs": [
+            "Token mint"
+          ]
+        },
+        {
+          "name": "offer",
+          "docs": [
+            "The offer (to determine who should fund and validate it's still active)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.offer_id",
+                "account": "Trade"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                171,
+                190,
+                108,
+                11,
+                254,
+                253,
+                2,
+                193,
+                33,
+                23,
+                3,
+                203,
+                117,
+                58,
+                185,
+                67,
+                11,
+                40,
+                12,
+                221,
+                193,
+                5,
+                197,
+                48,
+                154,
+                134,
+                100,
+                241,
+                190,
+                33,
+                144,
+                146
+              ]
+            }
+          }
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config for CPI authorization"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        },
+        {
+          "name": "escrow_program",
+          "docs": [
+            "Escrow program for CPI"
+          ],
+          "address": "CfpW1FrK41jj5tv1JRBxgRTqRr7Yeok9HeqnaUMg46VJ"
+        },
+        {
+          "name": "trade_program",
+          "docs": [
+            "The Trade program account for CPI caller identification"
+          ],
+          "address": "5fRDb9S3Z61fBALmDHNV5EH7GDP8gsCGkQT8eawDL1kE"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_counter",
+      "docs": [
+        "Initialize the trade counter",
+        "",
+        "This must be called once before any trades can be created.",
+        "It initializes the global trade counter PDA."
+      ],
+      "discriminator": [
+        67,
+        89,
+        100,
+        87,
+        231,
+        172,
+        35,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initiate_dispute",
+      "docs": [
+        "Initiate a dispute",
+        "",
+        "Starts the dispute resolution process by assigning an arbitrator",
+        "and freezing the escrow.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - InitiateDispute context with trade PDA, arbitrator registry",
+        "",
+        "# Access Control",
+        "",
+        "Buyer or seller can initiate dispute after escrow funded.",
+        "",
+        "# State Transition",
+        "",
+        "EscrowFunded → Disputed",
+        "FiatDeposited → Disputed",
+        "",
+        "# Security",
+        "",
+        "- Assigns arbitrator via Arbitrator program CPI",
+        "- Freezes escrow via Escrow program CPI",
+        "- Records dispute timestamp"
+      ],
+      "discriminator": [
+        128,
+        242,
+        160,
+        23,
+        44,
+        61,
+        171,
+        37
+      ],
+      "accounts": [
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.id",
+                "account": "Trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "initiator",
+          "docs": [
+            "The party initiating dispute (buyer or seller)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "escrow_vault",
+          "docs": [
+            "Escrow vault (to freeze)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.id",
+                "account": "Trade"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                173,
+                98,
+                85,
+                223,
+                135,
+                23,
+                133,
+                67,
+                136,
+                10,
+                119,
+                67,
+                212,
+                108,
+                206,
+                149,
+                6,
+                144,
+                83,
+                110,
+                109,
+                9,
+                50,
+                27,
+                54,
+                55,
+                99,
+                130,
+                151,
+                23,
+                136,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "name": "dispute",
+          "docs": [
+            "Dispute PDA (to be created)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "arbitrator",
+          "docs": [
+            "Arbitrator for this fiat currency"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  98,
+                  105,
+                  116,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "arbitrator.pubkey",
+                "account": "Arbitrator"
+              },
+              {
+                "kind": "account",
+                "path": "trade.fiat_currency",
+                "account": "Trade"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                253,
+                168,
+                184,
+                249,
+                65,
+                47,
+                90,
+                233,
+                184,
+                228,
+                50,
+                124,
+                216,
+                83,
+                50,
+                44,
+                190,
+                234,
+                172,
+                246,
+                55,
+                169,
+                104,
+                45,
+                121,
+                59,
+                253,
+                145,
+                110,
+                103,
+                240,
+                143
+              ]
+            }
+          }
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config for CPI authorization"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        },
+        {
+          "name": "escrow_program",
+          "docs": [
+            "Escrow program for CPI"
+          ],
+          "address": "CfpW1FrK41jj5tv1JRBxgRTqRr7Yeok9HeqnaUMg46VJ"
+        },
+        {
+          "name": "arbitrator_program",
+          "docs": [
+            "Arbitrator program for CPI"
+          ],
+          "address": "J5BNGJ128bxHuWemwaoGkDqy8DVSvsA7o5kpdy9eDoNe"
+        },
+        {
+          "name": "trade_program",
+          "docs": [
+            "The Trade program account for CPI caller identification"
+          ],
+          "address": "5fRDb9S3Z61fBALmDHNV5EH7GDP8gsCGkQT8eawDL1kE"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "refund_trade",
+      "docs": [
+        "Refund escrowed tokens",
+        "",
+        "Returns escrowed tokens to the depositor after escrow was funded.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - RefundTrade context with trade PDA, token accounts",
+        "",
+        "# Access Control",
+        "",
+        "Buyer or seller can initiate refund after escrow funded.",
+        "",
+        "# State Transition",
+        "",
+        "EscrowFunded → EscrowRefunded",
+        "",
+        "# Security",
+        "",
+        "- Returns full amount (no fees on refunds)",
+        "- Calls Escrow program via CPI",
+        "- Decrements active_trades counter"
+      ],
+      "discriminator": [
+        193,
+        241,
+        128,
+        69,
+        5,
+        235,
+        155,
+        252
+      ],
+      "accounts": [
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.id",
+                "account": "Trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "refunder",
+          "docs": [
+            "The party initiating refund (buyer or seller)"
+          ],
+          "signer": true
+        },
+        {
+          "name": "escrow_vault",
+          "docs": [
+            "Escrow vault PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.id",
+                "account": "Trade"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                173,
+                98,
+                85,
+                223,
+                135,
+                23,
+                133,
+                67,
+                136,
+                10,
+                119,
+                67,
+                212,
+                108,
+                206,
+                149,
+                6,
+                144,
+                83,
+                110,
+                109,
+                9,
+                50,
+                27,
+                54,
+                55,
+                99,
+                130,
+                151,
+                23,
+                136,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "name": "escrow_vault_token_account",
+          "docs": [
+            "Escrow vault's token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "depositor_token_account",
+          "docs": [
+            "Depositor's token account (to receive refund)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "offer",
+          "docs": [
+            "The offer (to determine who deposited)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.offer_id",
+                "account": "Trade"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                171,
+                190,
+                108,
+                11,
+                254,
+                253,
+                2,
+                193,
+                33,
+                23,
+                3,
+                203,
+                117,
+                58,
+                185,
+                67,
+                11,
+                40,
+                12,
+                221,
+                193,
+                5,
+                197,
+                48,
+                154,
+                134,
+                100,
+                241,
+                190,
+                33,
+                144,
+                146
+              ]
+            }
+          }
+        },
+        {
+          "name": "buyer_profile",
+          "docs": [
+            "Buyer's profile (for counter update)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.buyer",
+                "account": "Trade"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                105,
+                94,
+                163,
+                210,
+                170,
+                223,
+                187,
+                115,
+                217,
+                215,
+                124,
+                81,
+                110,
+                1,
+                242,
+                150,
+                89,
+                140,
+                163,
+                16,
+                66,
+                9,
+                127,
+                184,
+                47,
+                113,
+                40,
+                9,
+                161,
+                128,
+                22,
+                4
+              ]
+            }
+          }
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config for CPI authorization"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        },
+        {
+          "name": "escrow_program",
+          "docs": [
+            "Escrow program for CPI"
+          ],
+          "address": "CfpW1FrK41jj5tv1JRBxgRTqRr7Yeok9HeqnaUMg46VJ"
+        },
+        {
+          "name": "profile_program",
+          "docs": [
+            "Profile program for CPI"
+          ],
+          "address": "86KWUvm3YK3fsSqSF1iLCRB2mLmHFcGUozFvD823Npf5"
+        },
+        {
+          "name": "trade_program",
+          "docs": [
+            "The Trade program account for CPI caller identification"
+          ],
+          "address": "5fRDb9S3Z61fBALmDHNV5EH7GDP8gsCGkQT8eawDL1kE"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "release_escrow",
+      "docs": [
+        "Release escrowed tokens",
+        "",
+        "Releases tokens from escrow to the recipient with automatic fee distribution.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - ReleaseEscrow context with all token accounts, profiles, hub config",
+        "",
+        "# Access Control",
+        "",
+        "- Normal flow: seller initiates release",
+        "- Dispute flow: arbitrator initiates release",
+        "",
+        "# State Transition",
+        "",
+        "FiatDeposited → EscrowReleased (normal flow)",
+        "DisputeResolved → EscrowReleased (dispute flow)",
+        "",
+        "# Security",
+        "",
+        "- Distributes fees to treasury, warchest, and arbitrator (if disputed)",
+        "- Updates both buyer and seller profile statistics",
+        "- Decrements active_trades counter"
+      ],
+      "discriminator": [
+        146,
+        253,
+        129,
+        233,
+        20,
+        145,
+        181,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "trade",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.id",
+                "account": "Trade"
+              }
+            ]
+          }
+        },
+        {
+          "name": "releaser",
+          "docs": [
+            "The party initiating release (seller for normal flow, or arbitrator for disputes)"
+          ],
+          "signer": true
+        },
+        {
+          "name": "escrow_vault",
+          "docs": [
+            "Escrow vault PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.id",
+                "account": "Trade"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                173,
+                98,
+                85,
+                223,
+                135,
+                23,
+                133,
+                67,
+                136,
+                10,
+                119,
+                67,
+                212,
+                108,
+                206,
+                149,
+                6,
+                144,
+                83,
+                110,
+                109,
+                9,
+                50,
+                27,
+                54,
+                55,
+                99,
+                130,
+                151,
+                23,
+                136,
+                197
+              ]
+            }
+          }
+        },
+        {
+          "name": "escrow_vault_token_account",
+          "docs": [
+            "Escrow vault's token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "recipient_token_account",
+          "docs": [
+            "Recipient's token account (buyer or seller depending on offer type and dispute)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "treasury_token_account",
+          "docs": [
+            "Treasury token account (for chain fee)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "warchest_token_account",
+          "docs": [
+            "Warchest token account (for warchest fee)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "arbitrator_token_account",
+          "docs": [
+            "Arbitrator token account (for arbitrator fee if disputed)"
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config (for fee configuration)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        },
+        {
+          "name": "buyer_profile",
+          "docs": [
+            "Buyer's profile (for statistics update)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.buyer",
+                "account": "Trade"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                105,
+                94,
+                163,
+                210,
+                170,
+                223,
+                187,
+                115,
+                217,
+                215,
+                124,
+                81,
+                110,
+                1,
+                242,
+                150,
+                89,
+                140,
+                163,
+                16,
+                66,
+                9,
+                127,
+                184,
+                47,
+                113,
+                40,
+                9,
+                161,
+                128,
+                22,
+                4
+              ]
+            }
+          }
+        },
+        {
+          "name": "seller_profile",
+          "docs": [
+            "Seller's profile (for statistics update)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.seller",
+                "account": "Trade"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                105,
+                94,
+                163,
+                210,
+                170,
+                223,
+                187,
+                115,
+                217,
+                215,
+                124,
+                81,
+                110,
+                1,
+                242,
+                150,
+                89,
+                140,
+                163,
+                16,
+                66,
+                9,
+                127,
+                184,
+                47,
+                113,
+                40,
+                9,
+                161,
+                128,
+                22,
+                4
+              ]
+            }
+          }
+        },
+        {
+          "name": "offer",
+          "docs": [
+            "The offer (to determine recipient and offer type)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade.offer_id",
+                "account": "Trade"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                171,
+                190,
+                108,
+                11,
+                254,
+                253,
+                2,
+                193,
+                33,
+                23,
+                3,
+                203,
+                117,
+                58,
+                185,
+                67,
+                11,
+                40,
+                12,
+                221,
+                193,
+                5,
+                197,
+                48,
+                154,
+                134,
+                100,
+                241,
+                190,
+                33,
+                144,
+                146
+              ]
+            }
+          }
+        },
+        {
+          "name": "escrow_program",
+          "docs": [
+            "Escrow program for CPI"
+          ],
+          "address": "CfpW1FrK41jj5tv1JRBxgRTqRr7Yeok9HeqnaUMg46VJ"
+        },
+        {
+          "name": "profile_program",
+          "docs": [
+            "Profile program for CPI"
+          ],
+          "address": "86KWUvm3YK3fsSqSF1iLCRB2mLmHFcGUozFvD823Npf5"
+        },
+        {
+          "name": "trade_program",
+          "docs": [
+            "The Trade program account for CPI caller identification"
+          ],
+          "address": "5fRDb9S3Z61fBALmDHNV5EH7GDP8gsCGkQT8eawDL1kE"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Arbitrator",
+      "discriminator": [
+        85,
+        123,
+        106,
+        57,
+        25,
+        249,
+        89,
+        192
+      ]
+    },
+    {
+      "name": "EscrowVault",
+      "discriminator": [
+        54,
+        84,
+        41,
+        149,
+        160,
+        181,
+        85,
+        114
+      ]
+    },
+    {
+      "name": "HubConfig",
+      "discriminator": [
+        115,
+        89,
+        81,
+        4,
+        182,
+        207,
+        219,
+        46
+      ]
+    },
+    {
+      "name": "Offer",
+      "discriminator": [
+        215,
+        88,
+        60,
+        71,
+        170,
+        162,
+        73,
+        229
+      ]
+    },
+    {
+      "name": "Trade",
+      "discriminator": [
+        132,
+        139,
+        123,
+        31,
+        157,
+        196,
+        244,
+        190
+      ]
+    },
+    {
+      "name": "TradeCounter",
+      "discriminator": [
+        244,
+        30,
+        173,
+        248,
+        211,
+        124,
+        183,
+        217
+      ]
+    },
+    {
+      "name": "UserProfile",
+      "discriminator": [
+        32,
+        37,
+        119,
+        205,
+        179,
+        180,
+        13,
+        194
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "CounterInitialized",
+      "discriminator": [
+        115,
+        205,
+        233,
+        189,
+        129,
+        219,
+        117,
+        64
+      ]
+    },
+    {
+      "name": "DisputeInitiated",
+      "discriminator": [
+        150,
+        109,
+        93,
+        252,
+        198,
+        4,
+        183,
+        153
+      ]
+    },
+    {
+      "name": "EscrowFunded",
+      "discriminator": [
+        228,
+        243,
+        166,
+        74,
+        22,
+        167,
+        157,
+        244
+      ]
+    },
+    {
+      "name": "EscrowReleased",
+      "discriminator": [
+        131,
+        7,
+        138,
+        104,
+        166,
+        190,
+        113,
+        112
+      ]
+    },
+    {
+      "name": "FiatDepositConfirmed",
+      "discriminator": [
+        186,
+        122,
+        92,
+        128,
+        76,
+        153,
+        9,
+        52
+      ]
+    },
+    {
+      "name": "TradeAccepted",
+      "discriminator": [
+        111,
+        233,
+        226,
+        39,
+        146,
+        226,
+        46,
+        44
+      ]
+    },
+    {
+      "name": "TradeCanceled",
+      "discriminator": [
+        153,
+        38,
+        12,
+        97,
+        3,
+        208,
+        77,
+        48
+      ]
+    },
+    {
+      "name": "TradeCreated",
+      "discriminator": [
+        110,
+        86,
+        122,
+        20,
+        81,
+        78,
+        181,
+        72
+      ]
+    },
+    {
+      "name": "TradeExpired",
+      "discriminator": [
+        222,
+        90,
+        56,
+        100,
+        135,
+        40,
+        65,
+        220
+      ]
+    },
+    {
+      "name": "TradeRefunded",
+      "discriminator": [
+        207,
+        66,
+        16,
+        219,
+        176,
+        253,
+        208,
+        242
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidAmount",
+      "msg": "Invalid amount: must be greater than 0"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidFiatAmount",
+      "msg": "Invalid fiat amount: must be greater than 0"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidFiatCurrency",
+      "msg": "Invalid fiat currency code"
+    },
+    {
+      "code": 6003,
+      "name": "ContactInfoTooLong",
+      "msg": "Contact information exceeds maximum length (280 characters)"
+    },
+    {
+      "code": 6004,
+      "name": "SelfTradeNotAllowed",
+      "msg": "Cannot trade with yourself"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidStateTransition",
+      "msg": "Invalid state transition"
+    },
+    {
+      "code": 6006,
+      "name": "TradeExpired",
+      "msg": "Trade has expired"
+    },
+    {
+      "code": 6007,
+      "name": "TradeNotExpired",
+      "msg": "Trade has not expired yet"
+    },
+    {
+      "code": 6008,
+      "name": "Unauthorized",
+      "msg": "Unauthorized: only trade parties can perform this action"
+    },
+    {
+      "code": 6009,
+      "name": "OnlyBuyer",
+      "msg": "Unauthorized: only buyer can perform this action"
+    },
+    {
+      "code": 6010,
+      "name": "OnlySeller",
+      "msg": "Unauthorized: only seller can perform this action"
+    },
+    {
+      "code": 6011,
+      "name": "OnlyOfferOwner",
+      "msg": "Unauthorized: only offer owner can accept trade"
+    },
+    {
+      "code": 6012,
+      "name": "AmountBelowMinimum",
+      "msg": "Trade amount is below offer minimum"
+    },
+    {
+      "code": 6013,
+      "name": "AmountAboveMaximum",
+      "msg": "Trade amount is above offer maximum"
+    },
+    {
+      "code": 6014,
+      "name": "OfferNotActive",
+      "msg": "Offer is not active"
+    },
+    {
+      "code": 6015,
+      "name": "InvalidState",
+      "msg": "Trade is not in the correct state for this operation"
+    },
+    {
+      "code": 6016,
+      "name": "EscrowAlreadyFunded",
+      "msg": "Escrow is already funded"
+    },
+    {
+      "code": 6017,
+      "name": "EscrowNotFunded",
+      "msg": "Escrow is not funded"
+    },
+    {
+      "code": 6018,
+      "name": "AlreadyDisputed",
+      "msg": "Trade is already disputed"
+    },
+    {
+      "code": 6019,
+      "name": "NotDisputed",
+      "msg": "Trade is not disputed"
+    },
+    {
+      "code": 6020,
+      "name": "CounterOverflow",
+      "msg": "Trade counter overflow"
+    },
+    {
+      "code": 6021,
+      "name": "MaxActiveTradesReached",
+      "msg": "Maximum active trades reached"
+    },
+    {
+      "code": 6022,
+      "name": "OfferTypeMismatch",
+      "msg": "Offer type mismatch"
+    },
+    {
+      "code": 6023,
+      "name": "TokenMintMismatch",
+      "msg": "Token mint mismatch"
+    },
+    {
+      "code": 6024,
+      "name": "FiatCurrencyMismatch",
+      "msg": "Fiat currency mismatch"
+    },
+    {
+      "code": 6025,
+      "name": "ArbitratorNotAssigned",
+      "msg": "Arbitrator not assigned"
+    },
+    {
+      "code": 6026,
+      "name": "OnlyAssignedArbitrator",
+      "msg": "Only assigned arbitrator can resolve dispute"
+    },
+    {
+      "code": 6027,
+      "name": "OperationPaused",
+      "msg": "Operation is paused by circuit breaker"
+    },
+    {
+      "code": 6028,
+      "name": "NewTradesPaused",
+      "msg": "New trades are paused by circuit breaker"
+    },
+    {
+      "code": 6029,
+      "name": "AmountOutOfRange",
+      "msg": "Trade amount outside offer's min/max range"
+    },
+    {
+      "code": 6030,
+      "name": "NumericalOverflow",
+      "msg": "Numerical overflow in calculation"
+    },
+    {
+      "code": 6031,
+      "name": "EscrowReleasePaused",
+      "msg": "Escrow release is paused by circuit breaker"
+    }
+  ],
+  "types": [
+    {
+      "name": "AcceptTradeParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "seller_contact",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Arbitrator",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "pubkey",
+            "docs": [
+              "Arbitrator's public key"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "fiat_currency",
+            "docs": [
+              "Fiat currency this arbitrator handles (ISO 4217 code)"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Whether arbitrator is active"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "total_disputes",
+            "docs": [
+              "Statistics"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "resolved_disputes",
+            "type": "u64"
+          },
+          {
+            "name": "registered_at",
+            "docs": [
+              "Registration timestamp"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CounterInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "next_id",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CreateTradeParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer_id",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "fiat_amount",
+            "type": "u64"
+          },
+          {
+            "name": "buyer_contact",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DisputeInitiated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "initiator",
+            "type": "pubkey"
+          },
+          {
+            "name": "arbitrator",
+            "type": {
+              "option": "pubkey"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowFunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "funder",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowReleased",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowVault",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "trade_id",
+            "docs": [
+              "Associated trade ID"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "token_mint",
+            "docs": [
+              "Token mint address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "depositor",
+            "docs": [
+              "Depositor (who funded the escrow)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Amount deposited (in token lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_funded",
+            "docs": [
+              "Whether escrow is funded"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "is_frozen",
+            "docs": [
+              "Whether escrow is frozen (during dispute)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "funded_at",
+            "docs": [
+              "Timestamps"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "released_at",
+            "type": {
+              "option": "i64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "FiatDepositConfirmed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HubConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "admin",
+            "docs": [
+              "Admin authority"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "offer_program",
+            "docs": [
+              "Program addresses"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "trade_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "profile_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "arbitrator_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_oracle_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "burn_fee_pct",
+            "docs": [
+              "Fee configuration (basis points, 10000 = 100%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "chain_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "warchest_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "conversion_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "arbitrator_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "min_trade_amount",
+            "docs": [
+              "Trading limits (USD cents)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_trade_amount",
+            "type": "u64"
+          },
+          {
+            "name": "max_active_offers",
+            "type": "u8"
+          },
+          {
+            "name": "max_active_trades",
+            "type": "u8"
+          },
+          {
+            "name": "trade_expiration_timer",
+            "docs": [
+              "Timers (seconds)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "trade_dispute_timer",
+            "type": "u64"
+          },
+          {
+            "name": "global_pause",
+            "docs": [
+              "Circuit breakers"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "pause_new_offers",
+            "type": "bool"
+          },
+          {
+            "name": "pause_new_trades",
+            "type": "bool"
+          },
+          {
+            "name": "pause_escrow_funding",
+            "type": "bool"
+          },
+          {
+            "name": "pause_escrow_release",
+            "type": "bool"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Treasury addresses"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "warchest",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Offer",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "id",
+            "docs": [
+              "Unique offer ID"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Offer owner"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "offer_type",
+            "docs": [
+              "Offer type (Buy or Sell)"
+            ],
+            "type": {
+              "defined": {
+                "name": "OfferType"
+              }
+            }
+          },
+          {
+            "name": "state",
+            "docs": [
+              "Offer state"
+            ],
+            "type": {
+              "defined": {
+                "name": "OfferState"
+              }
+            }
+          },
+          {
+            "name": "fiat_currency",
+            "docs": [
+              "Fiat currency code (ISO 4217, e.g., \"USD\")"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "token_mint",
+            "docs": [
+              "SPL token mint"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "min_amount",
+            "docs": [
+              "Minimum amount (token lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_amount",
+            "docs": [
+              "Maximum amount (token lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "rate",
+            "docs": [
+              "Exchange rate (fiat cents per token unit)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "description",
+            "docs": [
+              "Description (max 280 chars)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamps"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferState",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Paused"
+          },
+          {
+            "name": "Deleted"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Buy"
+          },
+          {
+            "name": "Sell"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Trade",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "id",
+            "docs": [
+              "Unique trade ID"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "offer_id",
+            "docs": [
+              "Reference to offer"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "buyer",
+            "docs": [
+              "Buyer pubkey"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "docs": [
+              "Seller pubkey"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "state",
+            "docs": [
+              "Current trade state"
+            ],
+            "type": {
+              "defined": {
+                "name": "TradeState"
+              }
+            }
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Token amount (token lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fiat_amount",
+            "docs": [
+              "Fiat amount (fiat cents)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "token_mint",
+            "docs": [
+              "SPL token mint"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "fiat_currency",
+            "docs": [
+              "Fiat currency code (ISO 4217, e.g., \"USD\")"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "buyer_contact",
+            "docs": [
+              "Buyer's encrypted contact info"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "seller_contact",
+            "docs": [
+              "Seller's encrypted contact info"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "escrow_vault",
+            "docs": [
+              "Escrow vault PDA"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "arbitrator",
+            "docs": [
+              "Assigned arbitrator (if disputed)"
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "dispute_initiated_at",
+            "docs": [
+              "Dispute initiated timestamp"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "expires_at",
+            "docs": [
+              "Trade expiration timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamps"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeAccepted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeCanceled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "canceler",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeCounter",
+      "docs": [
+        "Global counter for sequential trade IDs"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "next_id",
+            "docs": [
+              "Next available trade ID"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "offer_id",
+            "type": "u64"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "fiat_amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeExpired",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "expired_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "depositor",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeState",
+      "docs": [
+        "Trade state machine"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "RequestCreated"
+          },
+          {
+            "name": "RequestAccepted"
+          },
+          {
+            "name": "EscrowFunded"
+          },
+          {
+            "name": "FiatDeposited"
+          },
+          {
+            "name": "EscrowReleased"
+          },
+          {
+            "name": "RequestCanceled"
+          },
+          {
+            "name": "RequestExpired"
+          },
+          {
+            "name": "EscrowRefunded"
+          },
+          {
+            "name": "Disputed"
+          },
+          {
+            "name": "DisputeResolved"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserProfile",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Profile owner"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "contact_info",
+            "docs": [
+              "Encrypted contact information (max 280 chars)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "encryption_key",
+            "docs": [
+              "Encryption key for contact info (max 280 chars)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "total_trades",
+            "docs": [
+              "Trading statistics"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "completed_trades",
+            "type": "u64"
+          },
+          {
+            "name": "disputed_trades",
+            "type": "u64"
+          },
+          {
+            "name": "total_buy_volume",
+            "type": "u64"
+          },
+          {
+            "name": "total_sell_volume",
+            "type": "u64"
+          },
+          {
+            "name": "active_offers",
+            "docs": [
+              "Active counters (for limit enforcement)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "active_trades",
+            "type": "u8"
+          },
+          {
+            "name": "reputation_score",
+            "docs": [
+              "Reputation score (0-10000 basis points, 10000 = 100%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamps"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

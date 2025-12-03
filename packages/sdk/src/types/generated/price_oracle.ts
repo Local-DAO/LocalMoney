@@ -1,0 +1,1152 @@
+/**
+ * Program IDL in camelCase format in order to be used in JS/TS.
+ *
+ * Note that this is only a type helper and is not the actual IDL. The original
+ * IDL can be found at `target/idl/price_oracle.json`.
+ */
+export type PriceOracle = {
+  "address": "CwWd4PCPx85fgREweU3UWWd6kxhtqRVd9xh2iVMT9Rbw",
+  "metadata": {
+    "name": "priceOracle",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "LocalMoney Price Oracle Program - Fiat price feeds"
+  },
+  "instructions": [
+    {
+      "name": "initializePrice",
+      "docs": [
+        "Initialize a price feed for a fiat currency",
+        "",
+        "Creates a new Price account for a specific fiat currency.",
+        "Each currency has its own price feed that can be updated by",
+        "authorized providers.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - InitializePrice context",
+        "* `fiat_currency` - ISO 4217 currency code (e.g., \"USD\", \"EUR\")",
+        "* `params` - Initial price configuration",
+        "",
+        "# Access Control",
+        "",
+        "Only the registry admin can initialize new price feeds.",
+        "",
+        "# Validation",
+        "",
+        "- Fiat currency code must be 3 uppercase ASCII letters",
+        "- Initial price must be within min/max bounds",
+        "- Min price must be less than max price",
+        "",
+        "# Price Format",
+        "",
+        "Prices are stored as u64 values scaled by decimals.",
+        "Example: With 6 decimals, price of 1.50 USD = 1_500_000"
+      ],
+      "discriminator": [
+        241,
+        226,
+        24,
+        17,
+        26,
+        192,
+        105,
+        181
+      ],
+      "accounts": [
+        {
+          "name": "registry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  112,
+                  114,
+                  111,
+                  118,
+                  105,
+                  100,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "price",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "fiatCurrency"
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "registry"
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fiatCurrency",
+          "type": {
+            "array": [
+              "u8",
+              3
+            ]
+          }
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "initializePriceParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initializeRegistry",
+      "docs": [
+        "Initialize the price provider registry",
+        "",
+        "This must be called once to set up the price oracle system.",
+        "It creates the global registry that tracks all authorized price providers.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - InitializeRegistry context",
+        "* `params` - Configuration parameters (staleness limit)",
+        "",
+        "# Access Control",
+        "",
+        "Can only be called once to initialize the registry PDA.",
+        "The caller becomes the registry admin."
+      ],
+      "discriminator": [
+        189,
+        181,
+        20,
+        17,
+        174,
+        57,
+        249,
+        59
+      ],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  112,
+                  114,
+                  111,
+                  118,
+                  105,
+                  100,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "initializeRegistryParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "registerProvider",
+      "docs": [
+        "Register a new price provider",
+        "",
+        "Admin-only operation to authorize new price providers who can",
+        "submit price updates for fiat currencies.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - RegisterProvider context",
+        "* `provider_pubkey` - Public key of the provider to register",
+        "",
+        "# Access Control",
+        "",
+        "Only the registry admin can register new providers.",
+        "",
+        "# Effects",
+        "",
+        "- Creates a PriceProvider account for the provider",
+        "- Increments the total provider count in the registry",
+        "- Provider is active by default"
+      ],
+      "discriminator": [
+        254,
+        209,
+        54,
+        184,
+        46,
+        197,
+        109,
+        78
+      ],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  112,
+                  114,
+                  111,
+                  118,
+                  105,
+                  100,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "provider",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  112,
+                  114,
+                  111,
+                  118,
+                  105,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "providerPubkey"
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "registry"
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "providerPubkey",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "removeProvider",
+      "docs": [
+        "Remove (deactivate) a price provider",
+        "",
+        "Admin-only operation to revoke a provider's authorization.",
+        "This doesn't delete the account, but marks them as inactive.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - RemoveProvider context",
+        "",
+        "# Access Control",
+        "",
+        "Only the registry admin can remove providers.",
+        "",
+        "# Effects",
+        "",
+        "- Marks provider as inactive",
+        "- Decrements the active provider count",
+        "- Provider can no longer submit price updates"
+      ],
+      "discriminator": [
+        100,
+        1,
+        225,
+        45,
+        96,
+        44,
+        30,
+        13
+      ],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  112,
+                  114,
+                  111,
+                  118,
+                  105,
+                  100,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "provider",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  112,
+                  114,
+                  111,
+                  118,
+                  105,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "provider.pubkey",
+                "account": "priceProvider"
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "registry"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "updatePrice",
+      "docs": [
+        "Update a price feed",
+        "",
+        "Authorized providers can submit new price values for fiat currencies.",
+        "The price is validated against configured min/max bounds before updating.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - UpdatePrice context",
+        "* `params` - New price value",
+        "",
+        "# Access Control",
+        "",
+        "Only active, authorized price providers can update prices.",
+        "The provider must sign the transaction with their registered key.",
+        "",
+        "# Validation",
+        "",
+        "- Provider must be active",
+        "- Provider signature must match registered pubkey",
+        "- Price value must be within min/max bounds",
+        "- Price value must be greater than zero",
+        "",
+        "# Effects",
+        "",
+        "- Updates the price value",
+        "- Records the provider who submitted the update",
+        "- Updates the timestamp",
+        "- Increments provider's update count",
+        "",
+        "# Staleness",
+        "",
+        "Prices become stale after the configured staleness period",
+        "(default: 1 hour). Other programs should check staleness",
+        "before using price data."
+      ],
+      "discriminator": [
+        61,
+        34,
+        117,
+        155,
+        75,
+        34,
+        123,
+        208
+      ],
+      "accounts": [
+        {
+          "name": "registry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  112,
+                  114,
+                  111,
+                  118,
+                  105,
+                  100,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "provider",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  112,
+                  114,
+                  111,
+                  118,
+                  105,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "providerSigner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "price",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "price.fiat_currency",
+                "account": "price"
+              }
+            ]
+          }
+        },
+        {
+          "name": "providerSigner",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "updatePriceParams"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "price",
+      "discriminator": [
+        50,
+        107,
+        127,
+        61,
+        83,
+        36,
+        39,
+        75
+      ]
+    },
+    {
+      "name": "priceProvider",
+      "discriminator": [
+        176,
+        114,
+        237,
+        137,
+        47,
+        188,
+        39,
+        24
+      ]
+    },
+    {
+      "name": "priceProviderRegistry",
+      "discriminator": [
+        125,
+        31,
+        50,
+        192,
+        156,
+        145,
+        152,
+        56
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "priceInitialized",
+      "discriminator": [
+        84,
+        235,
+        103,
+        21,
+        81,
+        170,
+        20,
+        190
+      ]
+    },
+    {
+      "name": "priceUpdated",
+      "discriminator": [
+        154,
+        72,
+        87,
+        150,
+        246,
+        230,
+        23,
+        217
+      ]
+    },
+    {
+      "name": "providerRegistered",
+      "discriminator": [
+        38,
+        209,
+        137,
+        78,
+        185,
+        19,
+        147,
+        14
+      ]
+    },
+    {
+      "name": "providerRemoved",
+      "discriminator": [
+        192,
+        1,
+        155,
+        196,
+        113,
+        29,
+        126,
+        25
+      ]
+    },
+    {
+      "name": "registryInitialized",
+      "discriminator": [
+        144,
+        138,
+        62,
+        105,
+        58,
+        38,
+        100,
+        177
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "unauthorized",
+      "msg": "Unauthorized: only admin can perform this action"
+    },
+    {
+      "code": 6001,
+      "name": "unauthorizedProvider",
+      "msg": "Unauthorized: only authorized price providers can update prices"
+    },
+    {
+      "code": 6002,
+      "name": "stalePrice",
+      "msg": "Price is stale (too old)"
+    },
+    {
+      "code": 6003,
+      "name": "priceExceedsMaximum",
+      "msg": "Price exceeds maximum allowed value"
+    },
+    {
+      "code": 6004,
+      "name": "priceBelowMinimum",
+      "msg": "Price below minimum allowed value"
+    },
+    {
+      "code": 6005,
+      "name": "invalidFiatCurrency",
+      "msg": "Invalid fiat currency code"
+    },
+    {
+      "code": 6006,
+      "name": "providerNotActive",
+      "msg": "Price provider is not active"
+    },
+    {
+      "code": 6007,
+      "name": "invalidPriceValue",
+      "msg": "Invalid price value (zero or negative)"
+    },
+    {
+      "code": 6008,
+      "name": "invalidDecimals",
+      "msg": "Invalid decimals value"
+    },
+    {
+      "code": 6009,
+      "name": "priceAlreadyInitialized",
+      "msg": "Price already initialized for this currency"
+    },
+    {
+      "code": 6010,
+      "name": "providerAlreadyRegistered",
+      "msg": "Provider already registered"
+    }
+  ],
+  "types": [
+    {
+      "name": "initializePriceParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "initialValue",
+            "docs": [
+              "Initial price value"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "decimals",
+            "docs": [
+              "Decimals (optional, defaults to 6)"
+            ],
+            "type": {
+              "option": "u8"
+            }
+          },
+          {
+            "name": "minPrice",
+            "docs": [
+              "Minimum allowed price (optional)"
+            ],
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "maxPrice",
+            "docs": [
+              "Maximum allowed price (optional)"
+            ],
+            "type": {
+              "option": "u64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "initializeRegistryParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "maxPriceStaleness",
+            "docs": [
+              "Maximum price staleness in seconds (optional, defaults to 1 hour)"
+            ],
+            "type": {
+              "option": "u64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "price",
+      "docs": [
+        "Price data for a specific fiat currency",
+        "",
+        "Stores the current exchange rate and metadata for validation."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "fiatCurrency",
+            "docs": [
+              "Fiat currency code (ISO 4217, e.g., \"USD\", \"EUR\")"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "value",
+            "docs": [
+              "Price value (scaled by decimals)",
+              "Example: If decimals=6 and price is 1.50 USD per token,",
+              "value = 1_500_000"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "decimals",
+            "docs": [
+              "Number of decimal places for the price",
+              "Standard: 6 decimals (same as USDC)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "minPrice",
+            "docs": [
+              "Minimum allowed price (for validation)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "maxPrice",
+            "docs": [
+              "Maximum allowed price (for validation)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lastProvider",
+            "docs": [
+              "Provider who last updated this price"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "lastUpdatedAt",
+            "docs": [
+              "Timestamp of last update"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "initializedAt",
+            "docs": [
+              "Timestamp when price was initialized"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "priceInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fiatCurrency",
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "initialValue",
+            "type": "u64"
+          },
+          {
+            "name": "decimals",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "priceProvider",
+      "docs": [
+        "Individual price provider account",
+        "",
+        "Each authorized provider has their own account tracking",
+        "their statistics and authorization status."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "pubkey",
+            "docs": [
+              "Provider's public key"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "isActive",
+            "docs": [
+              "Whether provider is active"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "totalUpdates",
+            "docs": [
+              "Total number of price updates submitted"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "registeredAt",
+            "docs": [
+              "Timestamp when provider was registered"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "lastUpdateAt",
+            "docs": [
+              "Last update timestamp"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "priceProviderRegistry",
+      "docs": [
+        "Global registry for managing price providers",
+        "",
+        "This account stores the admin authority and configuration",
+        "for the price oracle system."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "admin",
+            "docs": [
+              "Admin authority (typically Hub admin)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "totalProviders",
+            "docs": [
+              "Total number of registered providers"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "maxPriceStaleness",
+            "docs": [
+              "Maximum price staleness in seconds (default: 1 hour = 3600 seconds)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "initializedAt",
+            "docs": [
+              "Timestamp when registry was initialized"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "priceUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fiatCurrency",
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "value",
+            "type": "u64"
+          },
+          {
+            "name": "provider",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "providerRegistered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "provider",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "providerRemoved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "provider",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "registryInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "maxPriceStaleness",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "updatePriceParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "value",
+            "docs": [
+              "New price value"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+};

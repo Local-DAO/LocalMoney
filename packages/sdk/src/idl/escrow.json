@@ -1,0 +1,1278 @@
+{
+  "address": "CfpW1FrK41jj5tv1JRBxgRTqRr7Yeok9HeqnaUMg46VJ",
+  "metadata": {
+    "name": "escrow",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "LocalMoney Escrow Program - Token custody and release"
+  },
+  "instructions": [
+    {
+      "name": "freeze_escrow",
+      "docs": [
+        "Freeze escrow during dispute",
+        "",
+        "Prevents release of escrowed funds while a dispute is being resolved.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - FreezeEscrow context with vault PDA and hub_config",
+        "",
+        "# Access Control",
+        "",
+        "Only the Trade or Arbitrator programs (verified via Hub config) can call this instruction."
+      ],
+      "discriminator": [
+        100,
+        4,
+        61,
+        102,
+        0,
+        123,
+        141,
+        187
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.trade_id",
+                "account": "EscrowVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller_program",
+          "docs": [
+            "The program claiming to be the caller (must match Hub's trade_program or arbitrator_program)"
+          ]
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config for authorization - verifies caller is Trade or Arbitrator program"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "fund_escrow",
+      "docs": [
+        "Fund an escrow for a trade",
+        "",
+        "Locks tokens in a PDA-controlled Associated Token Account for the duration",
+        "of a trade. Only the Trade program should call this via CPI.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - FundEscrow context with vault PDA, token accounts, and hub_config",
+        "* `trade_id` - Unique trade identifier",
+        "* `params` - Amount to escrow",
+        "",
+        "# Access Control",
+        "",
+        "Only the Trade program (verified via Hub config) can call this instruction.",
+        "",
+        "# Security",
+        "",
+        "- Validates amount > 0",
+        "- Uses PDA as vault authority (no one can steal funds)",
+        "- Emits event for off-chain tracking"
+      ],
+      "discriminator": [
+        155,
+        18,
+        218,
+        141,
+        182,
+        213,
+        69,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "trade_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "depositor_token_account",
+          "docs": [
+            "Depositor's token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault_token_account",
+          "docs": [
+            "Vault's token account (ATA controlled by vault PDA)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_mint",
+          "docs": [
+            "Token mint"
+          ]
+        },
+        {
+          "name": "depositor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "caller_program",
+          "docs": [
+            "The program claiming to be the caller (must match Hub's trade_program)"
+          ]
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config for authorization - verifies caller is Trade program"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "trade_id",
+          "type": "u64"
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "FundEscrowParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "refund_escrow",
+      "docs": [
+        "Refund escrowed tokens to depositor",
+        "",
+        "Returns the full escrowed amount to the original depositor.",
+        "Used when a trade is canceled after escrow was funded.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - RefundEscrow context with vault, depositor token account, and hub_config",
+        "",
+        "# Access Control",
+        "",
+        "Only the Trade program (verified via Hub config) can call this instruction.",
+        "",
+        "# Security",
+        "",
+        "- Checks vault is funded",
+        "- Checks vault is not frozen",
+        "- Returns full amount (no fees on refunds)"
+      ],
+      "discriminator": [
+        107,
+        186,
+        89,
+        99,
+        26,
+        194,
+        23,
+        204
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.trade_id",
+                "account": "EscrowVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_token_account",
+          "docs": [
+            "Vault's token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "depositor_token_account",
+          "docs": [
+            "Depositor's token account (refund destination)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "caller_program",
+          "docs": [
+            "The program claiming to be the caller (must match Hub's trade_program)"
+          ]
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config for authorization - verifies caller is Trade program"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "release_escrow",
+      "docs": [
+        "Release escrowed tokens with fee distribution",
+        "",
+        "Distributes tokens to recipient with automatic fee deductions for:",
+        "- Chain fee (to treasury)",
+        "- Warchest fee",
+        "- Arbitrator fee (if dispute was resolved)",
+        "- Burn fee (retained/sent to burn address)",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - ReleaseEscrow context with all recipient token accounts and hub_config",
+        "* `params` - Fee percentages from Hub config",
+        "",
+        "# Access Control",
+        "",
+        "Only the Trade program (verified via Hub config) can call this instruction.",
+        "",
+        "# Security",
+        "",
+        "- Checks vault is not frozen",
+        "- Validates fee configuration doesn't exceed 100%",
+        "- Uses checked arithmetic for fee calculations",
+        "- PDA signs all token transfers"
+      ],
+      "discriminator": [
+        146,
+        253,
+        129,
+        233,
+        20,
+        145,
+        181,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.trade_id",
+                "account": "EscrowVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_token_account",
+          "docs": [
+            "Vault's token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "recipient_token_account",
+          "docs": [
+            "Recipient's token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "treasury_token_account",
+          "docs": [
+            "Treasury token account (for chain fee)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "warchest_token_account",
+          "docs": [
+            "Warchest token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "arbitrator_token_account",
+          "docs": [
+            "Arbitrator token account (optional, for disputes)"
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "caller_program",
+          "docs": [
+            "The program claiming to be the caller (must match Hub's trade_program)"
+          ]
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config for authorization - verifies caller is Trade program"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "ReleaseEscrowParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unfreeze_escrow",
+      "docs": [
+        "Unfreeze escrow after dispute resolution",
+        "",
+        "Allows release of escrowed funds after arbitrator resolves the dispute.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - UnfreezeEscrow context with vault PDA and hub_config",
+        "",
+        "# Access Control",
+        "",
+        "Only the Arbitrator program (verified via Hub config) can call this instruction."
+      ],
+      "discriminator": [
+        192,
+        184,
+        44,
+        209,
+        26,
+        169,
+        131,
+        0
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.trade_id",
+                "account": "EscrowVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller_program",
+          "docs": [
+            "The program claiming to be the caller (must match Hub's arbitrator_program)"
+          ]
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config for authorization - verifies caller is Arbitrator program"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "EscrowVault",
+      "discriminator": [
+        54,
+        84,
+        41,
+        149,
+        160,
+        181,
+        85,
+        114
+      ]
+    },
+    {
+      "name": "HubConfig",
+      "discriminator": [
+        115,
+        89,
+        81,
+        4,
+        182,
+        207,
+        219,
+        46
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "EscrowFrozen",
+      "discriminator": [
+        143,
+        99,
+        44,
+        214,
+        144,
+        68,
+        69,
+        249
+      ]
+    },
+    {
+      "name": "EscrowFunded",
+      "discriminator": [
+        228,
+        243,
+        166,
+        74,
+        22,
+        167,
+        157,
+        244
+      ]
+    },
+    {
+      "name": "EscrowRefunded",
+      "discriminator": [
+        132,
+        209,
+        49,
+        109,
+        135,
+        138,
+        28,
+        81
+      ]
+    },
+    {
+      "name": "EscrowReleased",
+      "discriminator": [
+        131,
+        7,
+        138,
+        104,
+        166,
+        190,
+        113,
+        112
+      ]
+    },
+    {
+      "name": "EscrowUnfrozen",
+      "discriminator": [
+        128,
+        58,
+        130,
+        127,
+        208,
+        162,
+        166,
+        47
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "Unauthorized: only authorized programs can perform this action"
+    },
+    {
+      "code": 6001,
+      "name": "EscrowFrozen",
+      "msg": "Escrow is frozen due to dispute"
+    },
+    {
+      "code": 6002,
+      "name": "EscrowNotFrozen",
+      "msg": "Escrow is not frozen"
+    },
+    {
+      "code": 6003,
+      "name": "InsufficientBalance",
+      "msg": "Insufficient escrow balance"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidAmount",
+      "msg": "Invalid token amount"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidFeeConfiguration",
+      "msg": "Invalid fee configuration"
+    },
+    {
+      "code": 6006,
+      "name": "TokenMintMismatch",
+      "msg": "Token mint mismatch"
+    },
+    {
+      "code": 6007,
+      "name": "AlreadyFunded",
+      "msg": "Escrow already funded"
+    },
+    {
+      "code": 6008,
+      "name": "NotFunded",
+      "msg": "Escrow not funded"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidRecipient",
+      "msg": "Invalid recipient address"
+    },
+    {
+      "code": 6010,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow in fee calculation"
+    }
+  ],
+  "types": [
+    {
+      "name": "EscrowFrozen",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowFunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "depositor",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "depositor",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowReleased",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "fees",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowUnfrozen",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowVault",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "trade_id",
+            "docs": [
+              "Associated trade ID"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "token_mint",
+            "docs": [
+              "Token mint address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "depositor",
+            "docs": [
+              "Depositor (who funded the escrow)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Amount deposited (in token lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_funded",
+            "docs": [
+              "Whether escrow is funded"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "is_frozen",
+            "docs": [
+              "Whether escrow is frozen (during dispute)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "funded_at",
+            "docs": [
+              "Timestamps"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "released_at",
+            "type": {
+              "option": "i64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "FundEscrowParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HubConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "admin",
+            "docs": [
+              "Admin authority"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "offer_program",
+            "docs": [
+              "Program addresses"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "trade_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "profile_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "arbitrator_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_oracle_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "burn_fee_pct",
+            "docs": [
+              "Fee configuration (basis points, 10000 = 100%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "chain_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "warchest_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "conversion_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "arbitrator_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "min_trade_amount",
+            "docs": [
+              "Trading limits (USD cents)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_trade_amount",
+            "type": "u64"
+          },
+          {
+            "name": "max_active_offers",
+            "type": "u8"
+          },
+          {
+            "name": "max_active_trades",
+            "type": "u8"
+          },
+          {
+            "name": "trade_expiration_timer",
+            "docs": [
+              "Timers (seconds)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "trade_dispute_timer",
+            "type": "u64"
+          },
+          {
+            "name": "global_pause",
+            "docs": [
+              "Circuit breakers"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "pause_new_offers",
+            "type": "bool"
+          },
+          {
+            "name": "pause_new_trades",
+            "type": "bool"
+          },
+          {
+            "name": "pause_escrow_funding",
+            "type": "bool"
+          },
+          {
+            "name": "pause_escrow_release",
+            "type": "bool"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Treasury addresses"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "warchest",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReleaseEscrowParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "burn_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "chain_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "warchest_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "arbitrator_fee_pct",
+            "type": {
+              "option": "u16"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

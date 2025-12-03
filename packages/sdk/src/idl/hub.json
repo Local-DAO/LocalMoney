@@ -1,0 +1,880 @@
+{
+  "address": "8xemd2mhu4zi314H6nFTGgXKTVFji4evLSedxKVvk7jH",
+  "metadata": {
+    "name": "hub",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "LocalMoney Hub Program - Central configuration and registry"
+  },
+  "instructions": [
+    {
+      "name": "initialize",
+      "docs": [
+        "Initialize the Hub configuration",
+        "",
+        "This sets up the central configuration for the entire LocalMoney protocol,",
+        "including program addresses, fee structure, trading limits, and circuit breakers.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - Initialize context with hub_config PDA and admin",
+        "* `params` - Initial configuration parameters",
+        "",
+        "# Access Control",
+        "",
+        "Can only be called once to initialize the Hub config PDA."
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "InitializeParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_circuit_breaker",
+      "docs": [
+        "Set circuit breaker flags",
+        "",
+        "Allows the admin to pause specific protocol operations or the entire protocol.",
+        "This is used for emergency situations or maintenance.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - SetCircuitBreaker context with hub_config PDA and admin",
+        "* `params` - Circuit breaker flags (all optional)",
+        "",
+        "# Access Control",
+        "",
+        "Only the current admin can call this instruction.",
+        "",
+        "# Circuit Breaker Types",
+        "",
+        "* `global_pause` - Pauses all protocol operations",
+        "* `pause_new_offers` - Prevents creation of new offers",
+        "* `pause_new_trades` - Prevents creation of new trades",
+        "* `pause_escrow_funding` - Prevents funding of escrows",
+        "* `pause_escrow_release` - Prevents release of escrowed funds"
+      ],
+      "discriminator": [
+        135,
+        207,
+        46,
+        31,
+        152,
+        94,
+        123,
+        247
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "CircuitBreakerParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "transfer_admin",
+      "docs": [
+        "Transfer admin authority",
+        "",
+        "Transfers the admin role to a new address. This is a one-step transfer",
+        "without requiring acceptance from the new admin.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - TransferAdmin context with hub_config PDA, current admin, and new admin",
+        "",
+        "# Access Control",
+        "",
+        "Only the current admin can call this instruction.",
+        "",
+        "# Security",
+        "",
+        "The new admin address is validated to ensure it's not the zero address."
+      ],
+      "discriminator": [
+        42,
+        242,
+        66,
+        106,
+        228,
+        10,
+        111,
+        156
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "new_admin"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_config",
+      "docs": [
+        "Update the Hub configuration",
+        "",
+        "Allows the admin to update any configuration parameters. All parameters",
+        "are optional - only provided values will be updated.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - UpdateConfig context with hub_config PDA and admin signer",
+        "* `params` - Updated configuration parameters (all optional)",
+        "",
+        "# Access Control",
+        "",
+        "Only the current admin can call this instruction."
+      ],
+      "discriminator": [
+        29,
+        158,
+        252,
+        191,
+        10,
+        83,
+        219,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "UpdateConfigParams"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "HubConfig",
+      "discriminator": [
+        115,
+        89,
+        81,
+        4,
+        182,
+        207,
+        219,
+        46
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AdminTransferred",
+      "discriminator": [
+        255,
+        147,
+        182,
+        5,
+        199,
+        217,
+        38,
+        179
+      ]
+    },
+    {
+      "name": "CircuitBreakerSet",
+      "discriminator": [
+        3,
+        73,
+        7,
+        135,
+        88,
+        126,
+        203,
+        24
+      ]
+    },
+    {
+      "name": "ConfigUpdated",
+      "discriminator": [
+        40,
+        241,
+        230,
+        122,
+        11,
+        19,
+        198,
+        194
+      ]
+    },
+    {
+      "name": "HubInitialized",
+      "discriminator": [
+        138,
+        228,
+        8,
+        83,
+        240,
+        141,
+        220,
+        138
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "Unauthorized: only admin can perform this action"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidFeeConfiguration",
+      "msg": "Invalid fee configuration: total fees exceed maximum allowed (10%)"
+    },
+    {
+      "code": 6002,
+      "name": "FeeExceedsLimit",
+      "msg": "Fee percentage exceeds individual limit"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidTradingLimit",
+      "msg": "Invalid trading limit: min amount must be less than max amount"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidTimerValue",
+      "msg": "Invalid timer value: must be greater than zero"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidAddress",
+      "msg": "Invalid address: cannot be zero address"
+    },
+    {
+      "code": 6006,
+      "name": "GloballyPaused",
+      "msg": "Protocol is globally paused"
+    },
+    {
+      "code": 6007,
+      "name": "OperationPaused",
+      "msg": "Operation is paused"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidProgramAddress",
+      "msg": "Invalid program address"
+    }
+  ],
+  "types": [
+    {
+      "name": "AdminTransferred",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "config_address",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CircuitBreakerParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "global_pause",
+            "type": {
+              "option": "bool"
+            }
+          },
+          {
+            "name": "pause_new_offers",
+            "type": {
+              "option": "bool"
+            }
+          },
+          {
+            "name": "pause_new_trades",
+            "type": {
+              "option": "bool"
+            }
+          },
+          {
+            "name": "pause_escrow_funding",
+            "type": {
+              "option": "bool"
+            }
+          },
+          {
+            "name": "pause_escrow_release",
+            "type": {
+              "option": "bool"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "CircuitBreakerSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "global_pause",
+            "type": "bool"
+          },
+          {
+            "name": "pause_new_offers",
+            "type": "bool"
+          },
+          {
+            "name": "pause_new_trades",
+            "type": "bool"
+          },
+          {
+            "name": "pause_escrow_funding",
+            "type": "bool"
+          },
+          {
+            "name": "pause_escrow_release",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "config_address",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HubConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "admin",
+            "docs": [
+              "Admin authority"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "offer_program",
+            "docs": [
+              "Program addresses"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "trade_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "profile_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "arbitrator_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_oracle_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "burn_fee_pct",
+            "docs": [
+              "Fee configuration (basis points, 10000 = 100%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "chain_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "warchest_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "conversion_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "arbitrator_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "min_trade_amount",
+            "docs": [
+              "Trading limits (USD cents)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_trade_amount",
+            "type": "u64"
+          },
+          {
+            "name": "max_active_offers",
+            "type": "u8"
+          },
+          {
+            "name": "max_active_trades",
+            "type": "u8"
+          },
+          {
+            "name": "trade_expiration_timer",
+            "docs": [
+              "Timers (seconds)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "trade_dispute_timer",
+            "type": "u64"
+          },
+          {
+            "name": "global_pause",
+            "docs": [
+              "Circuit breakers"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "pause_new_offers",
+            "type": "bool"
+          },
+          {
+            "name": "pause_new_trades",
+            "type": "bool"
+          },
+          {
+            "name": "pause_escrow_funding",
+            "type": "bool"
+          },
+          {
+            "name": "pause_escrow_release",
+            "type": "bool"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Treasury addresses"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "warchest",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HubInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "config_address",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitializeParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "trade_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "profile_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "arbitrator_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_oracle_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "burn_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "chain_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "warchest_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "conversion_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "arbitrator_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "min_trade_amount",
+            "type": "u64"
+          },
+          {
+            "name": "max_trade_amount",
+            "type": "u64"
+          },
+          {
+            "name": "max_active_offers",
+            "type": "u8"
+          },
+          {
+            "name": "max_active_trades",
+            "type": "u8"
+          },
+          {
+            "name": "trade_expiration_timer",
+            "type": "u64"
+          },
+          {
+            "name": "trade_dispute_timer",
+            "type": "u64"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "warchest",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateConfigParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer_program",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "trade_program",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "profile_program",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "escrow_program",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "arbitrator_program",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "price_oracle_program",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "burn_fee_pct",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "chain_fee_pct",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "warchest_fee_pct",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "conversion_fee_pct",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "arbitrator_fee_pct",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "min_trade_amount",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "max_trade_amount",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "max_active_offers",
+            "type": {
+              "option": "u8"
+            }
+          },
+          {
+            "name": "max_active_trades",
+            "type": {
+              "option": "u8"
+            }
+          },
+          {
+            "name": "trade_expiration_timer",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "trade_dispute_timer",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "treasury",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "warchest",
+            "type": {
+              "option": "pubkey"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -124,10 +124,10 @@ fn create_trade(
     let hub_cfg = get_hub_config(deps.as_ref());
 
     // Load Offer
-    let offer_id = new_trade.offer_id.clone();
+    let offer_id = new_trade.offer_id;
     let offer_result = load_offer(
         &deps.querier,
-        new_trade.offer_id.clone(),
+        new_trade.offer_id,
         hub_cfg.offer_addr.to_string(),
     );
     if offer_result.is_err() {
@@ -137,7 +137,7 @@ fn create_trade(
     }
     let offer_result = offer_result.unwrap();
     let offer = offer_result.offer;
-    assert_value_in_range(offer.min_amount, offer.max_amount, new_trade.amount.clone())?;
+    assert_value_in_range(offer.min_amount, offer.max_amount, new_trade.amount)?;
 
     // Can't create Trade with the same wallet
     if info.sender.eq(&offer.owner) {
@@ -246,7 +246,7 @@ fn create_trade(
     let trade = TradeModel::create(
         deps.storage,
         Trade::new(
-            trade_id.clone(),
+            trade_id,
             env.contract.address.clone(),
             buyer.clone(),
             seller.clone(),
@@ -258,7 +258,7 @@ fn create_trade(
             env.block.time.seconds(),
             expires_at,
             offer.denom.clone(),
-            new_trade.amount.clone(),
+            new_trade.amount,
             offer.fiat_currency,
             denom_final_price,
             trade_state_history,
@@ -312,6 +312,15 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::ArbitratorsFiat { fiat } => to_json_binary(
             &ArbitratorModel::query_arbitrators_fiat(deps.storage, fiat)?,
         ),
+        QueryMsg::TradesCountByStates { states } => {
+            to_json_binary(&count_trades_by_states(deps, states)?)
+        }
+        QueryMsg::TradesCountByFiatAndStates { fiat, states } => {
+            to_json_binary(&count_trades_by_fiat_and_states(deps, fiat, states)?)
+        }
+        QueryMsg::AllFiatsTradesCount { states } => {
+            to_json_binary(&count_all_fiats_trades(deps, states)?)
+        }
     }
 }
 
@@ -351,7 +360,7 @@ fn query_trade<T: CustomQuery>(env: Env, deps: Deps<T>, id: u64) -> StdResult<Tr
     let trade = TradeResponse::map(state, buyer, seller, arbitrator, block_time);
     let offer = load_offer(
         &deps.querier,
-        trade.offer_id.clone(),
+        trade.offer_id,
         hub_config.offer_addr.to_string(),
     )
     .unwrap();
@@ -382,7 +391,7 @@ pub fn query_trades<T: CustomQuery>(
     .unwrap();
 
     trade_results.iter().for_each(|trade: &Trade| {
-        let offer_id = trade.offer_id.clone();
+        let offer_id = trade.offer_id;
         let offer_contract = trade.offer_contract.to_string();
         let offer_response = load_offer(&deps.querier, offer_id, offer_contract).unwrap();
 
@@ -431,7 +440,7 @@ fn fund_escrow(
     let mut trade = TradeModel::from_store(deps.storage, trade_id);
     let offer = load_offer(
         &deps.querier.clone(),
-        trade.offer_id.clone(),
+        trade.offer_id,
         trade.offer_contract.to_string(),
     )
     .unwrap()
@@ -449,7 +458,7 @@ fn fund_escrow(
             });
         }
     };
-    let fee_info = calculate_fees(&hub_config, trade.amount.clone());
+    let fee_info = calculate_fees(&hub_config, trade.amount);
 
     // Everybody can set the state to RequestExpired, if it is expired (they are doing as a favor).
     if trade.request_expired(env.block.time.seconds()) {
@@ -636,7 +645,7 @@ fn cancel_request(
 
     let mut sub_msgs: Vec<SubMsg> = vec![];
     // Should not be called when the current state is TradeState::RequestCreated
-    if vec![TradeState::EscrowFunded, TradeState::RequestAccepted].contains(&trade.get_state()) {
+    if [TradeState::EscrowFunded, TradeState::RequestAccepted].contains(&trade.get_state()) {
         // Load hub config
         let hub_config = get_hub_config(deps.as_ref());
         let mut profile_submsgs = create_update_trades_count_msgs(
@@ -696,14 +705,14 @@ fn release_escrow(
     // Load the offer related to this trade
     let offer_response = load_offer(
         &deps.querier,
-        trade.offer_id.clone(),
+        trade.offer_id,
         hub_config.offer_addr.to_string(),
     )
     .unwrap();
 
     let mut send_msgs: Vec<SubMsg> = Vec::new();
     // Calculate and add protocol fees
-    let mut release_amount = trade.amount.clone();
+    let mut release_amount = trade.amount;
     let fee_info = add_protocol_fees_msgs(
         deps,
         &mut send_msgs,
@@ -784,7 +793,7 @@ fn refund_escrow(
         TradeState::EscrowRefunded,
     );
 
-    let amount = trade.amount.clone();
+    let amount = trade.amount;
     let denom = denom_to_string(&trade.denom);
     let refund_amount = vec![Coin::new(amount.u128(), denom.clone())];
     sub_msgs.push(SubMsg::new(create_send_msg(trade.seller, refund_amount)));
@@ -931,7 +940,7 @@ fn settle_dispute(
     // Load Offer
     let offer = load_offer(
         &deps.querier,
-        trade.offer_id.clone(),
+        trade.offer_id,
         trade.offer_contract.to_string(),
     )
     .unwrap()
@@ -971,10 +980,12 @@ fn settle_dispute(
     );
 
     // Pay arbitration fee
-    let arbitration_fee_amount = (hub_config.arbitration_fee_pct
-        * Decimal::from_ratio(trade.amount.u128(), 1u128))
-    .atomics();
-    let mut release_amount = trade.amount.sub(Uint128::from(arbitration_fee_amount));
+    // Compute arbitration fee as amount * pct, keeping token atomics
+    let one_e18 = Decimal::one().atomics();
+    let arbitration_fee_amount = trade
+        .amount
+        .multiply_ratio(hub_config.arbitration_fee_pct.atomics(), one_e18);
+    let mut release_amount = trade.amount.sub(arbitration_fee_amount);
 
     // Only deducts fees from the release_amount if the maker (offer owner) is the buyer
     if trade.buyer.eq(&offer.owner) {
@@ -1086,7 +1097,7 @@ fn handle_swap_reply(deps: DepsMut, _msg: Reply) -> Result<Response, ContractErr
     // Check if the received asset denom is the LOCAL Denom. If so, we can burn the asset and return.
     // If not, we need to swap the asset for the next denom in the conversion route.
     let local_denom = denom_to_string(&hub_config.local_denom);
-    return if received_asset_balance.denom.eq(&local_denom) {
+    if received_asset_balance.denom.eq(&local_denom) {
         // Burn $LOCAL
         let burn_msg = CosmosMsg::Bank(BankMsg::Burn {
             amount: vec![received_asset_balance.clone()],
@@ -1149,7 +1160,7 @@ fn handle_swap_reply(deps: DepsMut, _msg: Reply) -> Result<Response, ContractErr
         Err(ContractError::SwapErrorMissingDenom {
             expected_denom: received_denom,
         })
-    };
+    }
 }
 
 // Create sub messages for updating trades count fields on maker and taker profiles
@@ -1177,17 +1188,21 @@ fn create_send_msg(to_address: Addr, amount: Vec<Coin>) -> CosmosMsg {
 
 /// Returns a FeeInfo struct containing the calculated fees and the final release amount.
 fn calculate_fees(hub_config: &HubConfig, amount: Uint128) -> FeeInfo {
-    let amount_u128 = amount.u128();
-    let burn_amount = (hub_config.burn_fee_pct * Decimal::from_ratio(amount_u128, 1u128)).atomics();
-    let chain_amount =
-        (hub_config.chain_fee_pct * Decimal::from_ratio(amount_u128, 1u128)).atomics();
-    let warchest_amount =
-        (hub_config.warchest_fee_pct * Decimal::from_ratio(amount_u128, 1u128)).atomics();
+    // hub_config.*_fee_pct are Decimal values with 18 fractional digits.
+    // We must compute amount * pct in token atomics (micro-units) without
+    // introducing the Decimal's 1e18 scaling into the result.
+    // Use Uint128::multiply_ratio with pct.atomics() / 1e18 to avoid precision bugs.
+
+    let one_e18 = Decimal::one().atomics();
+
+    let burn_amount = amount.multiply_ratio(hub_config.burn_fee_pct.atomics(), one_e18);
+    let chain_amount = amount.multiply_ratio(hub_config.chain_fee_pct.atomics(), one_e18);
+    let warchest_amount = amount.multiply_ratio(hub_config.warchest_fee_pct.atomics(), one_e18);
 
     FeeInfo {
-        burn_amount: Uint128::from(burn_amount),
-        chain_amount: Uint128::from(chain_amount),
-        warchest_amount: Uint128::from(warchest_amount),
+        burn_amount,
+        chain_amount,
+        warchest_amount,
     }
 }
 
@@ -1200,7 +1215,7 @@ fn add_protocol_fees_msgs(
     hub_cfg: &HubConfig,
 ) -> FeeInfo {
     // Calculate fees
-    let fee_info = calculate_fees(hub_cfg, release_amount.clone());
+    let fee_info = calculate_fees(hub_cfg, *release_amount);
 
     // Protocol Fee (Burn)
     if !fee_info.burn_amount.is_zero() {
@@ -1277,3 +1292,76 @@ fn add_protocol_fees_msgs(
     fee_info
 }
 //endregion
+
+use localmoney_protocol::trade::{trades, TradesCount, FiatTradesCount};
+
+/// Count trades by their states
+fn count_trades_by_states(deps: Deps, states: Vec<TradeState>) -> StdResult<TradesCount> {
+    let mut count = 0u64;
+    
+    // Iterate through all trades and count those matching the requested states
+    let all_trades = trades()
+        .range(deps.storage, None, None, cosmwasm_std::Order::Ascending);
+    
+    for result in all_trades {
+        let (_, trade) = result?;
+        if states.contains(&trade.get_state()) {
+            count += 1;
+        }
+    }
+    
+    Ok(TradesCount { count })
+}
+
+/// Count trades by fiat currency and states
+fn count_trades_by_fiat_and_states(
+    deps: Deps,
+    fiat: FiatCurrency,
+    states: Vec<TradeState>,
+) -> StdResult<FiatTradesCount> {
+    let mut count = 0u64;
+    
+    // Iterate through all trades and count those matching both fiat and states
+    let all_trades = trades()
+        .range(deps.storage, None, None, cosmwasm_std::Order::Ascending);
+    
+    for result in all_trades {
+        let (_, trade) = result?;
+        if trade.fiat == fiat && states.contains(&trade.get_state()) {
+            count += 1;
+        }
+    }
+    
+    Ok(FiatTradesCount { fiat, count })
+}
+
+/// Count trades for all fiat currencies by states
+fn count_all_fiats_trades(
+    deps: Deps,
+    states: Vec<TradeState>,
+) -> StdResult<Vec<FiatTradesCount>> {
+    use std::collections::HashMap;
+    
+    let mut fiat_counts: HashMap<FiatCurrency, u64> = HashMap::new();
+    
+    // Iterate through all trades and count by fiat currency
+    let all_trades = trades()
+        .range(deps.storage, None, None, cosmwasm_std::Order::Ascending);
+    
+    for result in all_trades {
+        let (_, trade) = result?;
+        if states.contains(&trade.get_state()) {
+            *fiat_counts.entry(trade.fiat).or_insert(0) += 1;
+        }
+    }
+    
+    // Convert to vector and sort by count (descending)
+    let mut result: Vec<FiatTradesCount> = fiat_counts
+        .into_iter()
+        .map(|(fiat, count)| FiatTradesCount { fiat, count })
+        .collect();
+    
+    result.sort_by(|a, b| b.count.cmp(&a.count));
+    
+    Ok(result)
+}

@@ -1,0 +1,189 @@
+# LocalMoney EVM Contracts - Justfile
+# Core functionality for contract development
+
+# Load environment variables
+set dotenv-load
+
+# Default recipe shows help
+default:
+    @just --list
+
+# ============================================================================
+# CORE COMMANDS
+# ============================================================================
+
+# Compile smart contracts
+compile:
+    @echo "🔨 Compiling contracts..."
+    npx hardhat compile
+
+# Run tests
+test:
+    @echo "🧪 Running tests..."
+    npx hardhat test
+
+# Run specific test file
+test-file FILE:
+    @echo "🧪 Running test file: {{FILE}}"
+    npx hardhat test {{FILE}}
+
+# Run security tests
+test-security:
+    @echo "🔒 Running security tests..."
+    npx hardhat test test/SecurityFixes.test.js
+
+# Generate coverage report
+coverage:
+    @echo "📊 Generating coverage report..."
+    npx hardhat coverage
+
+# Generate gas usage report
+gas-report:
+    @echo "⛽ Generating gas report..."
+    REPORT_GAS=true npx hardhat test
+
+# Check contract sizes
+size:
+    @echo "📏 Checking contract sizes..."
+    npx hardhat size-contracts
+
+# ============================================================================
+# BASIC HARDHAT COMMANDS
+# ============================================================================
+
+# Clean build artifacts
+clean:
+    @echo "🧹 Cleaning build artifacts..."
+    npx hardhat clean
+
+# Start local hardhat node
+node:
+    @echo "🏠 Starting local hardhat node..."
+    npx hardhat node
+
+# Get hardhat console
+console NETWORK="localhost":
+    @echo "💻 Opening hardhat console for {{NETWORK}}..."
+    npx hardhat console --network {{NETWORK}}
+
+# ============================================================================
+# NETWORK SPECIFIC COMMANDS
+# ============================================================================
+
+# Deploy to localhost (requires running local node)
+deploy-local:
+    @echo "🚀 To deploy locally, you need deployment scripts"
+    @echo "💡 Consider implementing deployment as Hardhat tasks"
+
+# Check account balance on a network
+balance ADDRESS NETWORK="localhost":
+    @echo "💰 Checking balance for {{ADDRESS}} on {{NETWORK}}..."
+    npx hardhat run --network {{NETWORK}} <(echo "const { ethers } = require('hardhat'); async function main() { const balance = await ethers.provider.getBalance('{{ADDRESS}}'); console.log('Balance:', ethers.formatEther(balance), 'ETH'); } main().catch(console.error);")
+
+# Get network info
+network-info NETWORK="localhost":
+    @echo "🌐 Getting network info for {{NETWORK}}..."
+    npx hardhat run --network {{NETWORK}} <(echo "const { ethers } = require('hardhat'); async function main() { const network = await ethers.provider.getNetwork(); console.log('Network:', network.name || 'Unknown'); console.log('Chain ID:', network.chainId); console.log('Block Number:', await ethers.provider.getBlockNumber()); } main().catch(console.error);")
+
+# ============================================================================
+# PRICE CHECKING
+# ============================================================================
+
+# Check prices on any network
+check-prices NETWORK="bsc":
+    @echo "📊 Checking prices on {{NETWORK}}..."
+    npx hardhat run scripts/check-prices.js --network {{NETWORK}}
+
+# Alias for BSC specifically
+check-prices-bsc:
+    @just check-prices bsc
+
+# ============================================================================
+# UTILITY COMMANDS
+# ============================================================================
+
+# Show available networks from hardhat config
+networks:
+    @echo "🌐 Available networks:"
+    @echo "  localhost     - Local hardhat network"
+    @echo "  bsc          - BSC Mainnet (Chain ID: 56)" 
+    @echo "  bsc-testnet  - BSC Testnet (Chain ID: 97)"
+    @echo "  sepolia      - Ethereum Sepolia Testnet"
+    @echo "  mainnet      - Ethereum Mainnet"
+    @echo "  arbitrum     - Arbitrum Mainnet"
+    @echo "  optimism     - Optimism Mainnet"
+
+# Show environment variables status
+env-check:
+    @echo "🔧 Environment variables check:"
+    @if [ -f .env ]; then echo "✅ .env file exists"; else echo "❌ .env file missing"; fi
+    @if [ -n "${DEPLOYER_PRIVATE_KEY:-}" ]; then echo "✅ DEPLOYER_PRIVATE_KEY is set"; else echo "❌ DEPLOYER_PRIVATE_KEY not set"; fi
+
+# ============================================================================
+# DEVELOPMENT HELPERS
+# ============================================================================
+
+# Format contracts (if prettier is configured)
+format:
+    @echo "✨ Formatting contracts..."
+    @if command -v prettier > /dev/null; then \
+        prettier --write 'contracts/**/*.sol'; \
+    else \
+        echo "❌ Prettier not found. Install with: npm install -g prettier"; \
+    fi
+
+# Lint contracts (if solhint is configured)  
+lint:
+    @echo "🔍 Linting contracts..."
+    @if command -v solhint > /dev/null; then \
+        solhint 'contracts/**/*.sol'; \
+    else \
+        echo "❌ Solhint not found. Install with: npm install -g solhint"; \
+    fi
+
+# ============================================================================
+# HELP COMMANDS
+# ============================================================================
+
+# Show help for core development
+help-dev:
+    @echo "🛠️  Core Development Commands:"
+    @echo "  compile                 - Compile smart contracts"
+    @echo "  test                    - Run all tests"
+    @echo "  test-file FILE          - Run specific test file"
+    @echo "  coverage                - Generate coverage report"
+    @echo "  gas-report              - Generate gas usage report"
+    @echo "  size                    - Check contract sizes"
+
+# Show help for deployment
+help-deploy:
+    @echo "🚀 Deployment Commands:"
+    @echo "  deploy-local            - Instructions for local deployment"
+    @echo "  check-prices-bsc        - Check prices on BSC PriceOracle"
+    @echo ""
+    @echo "💡 Note: Original deployment scripts were removed."
+    @echo "   Consider implementing deployment as Hardhat tasks."
+
+# Show help for network operations
+help-network:
+    @echo "🌐 Network Commands:"
+    @echo "  balance ADDRESS NETWORK  - Check address balance"
+    @echo "  network-info NETWORK     - Get network information"
+    @echo "  networks                 - List available networks"
+    @echo "  node                     - Start local hardhat node"
+    @echo "  console NETWORK          - Open hardhat console"
+
+# Show all help
+help:
+    @echo "📚 LocalMoney EVM Contracts - Help"
+    @echo ""
+    @just help-dev
+    @echo ""
+    @just help-deploy
+    @echo ""
+    @just help-network
+    @echo ""
+    @echo "🔧 Other Commands:"
+    @echo "  env-check               - Check environment variables"
+    @echo "  format                  - Format contracts (requires prettier)"
+    @echo "  lint                    - Lint contracts (requires solhint)"

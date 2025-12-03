@@ -1,0 +1,960 @@
+{
+  "address": "86KWUvm3YK3fsSqSF1iLCRB2mLmHFcGUozFvD823Npf5",
+  "metadata": {
+    "name": "profile",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "LocalMoney Profile Program - User reputation and statistics"
+  },
+  "instructions": [
+    {
+      "name": "create_profile",
+      "docs": [
+        "Create a new user profile",
+        "",
+        "Initializes a profile for a user with encrypted contact information.",
+        "Each user can only have one profile.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - CreateProfile context with profile PDA and user",
+        "* `params` - Contact information and encryption key",
+        "",
+        "# Access Control",
+        "",
+        "Can only be called once per user (PDA prevents duplicates)."
+      ],
+      "discriminator": [
+        225,
+        205,
+        234,
+        143,
+        17,
+        186,
+        50,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "CreateProfileParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_active_counters",
+      "docs": [
+        "Update active offers/trades counters",
+        "",
+        "Called by the Offer or Trade programs to increment/decrement counters",
+        "when offers or trades are created/completed.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - UpdateActiveCounters context with profile, caller program, and hub_config",
+        "* `params` - Counter type and operation (increment/decrement)",
+        "",
+        "# Access Control",
+        "",
+        "Only the Trade or Offer programs (verified via Hub config) can call this instruction."
+      ],
+      "discriminator": [
+        161,
+        123,
+        53,
+        159,
+        141,
+        68,
+        216,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile.owner",
+                "account": "UserProfile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller_program",
+          "docs": [
+            "The program claiming to be the caller (must match Hub's trade_program or offer_program)"
+          ]
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config for authorization - verifies caller is authorized program"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "UpdateActiveCountersParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_contact",
+      "docs": [
+        "Update contact information",
+        "",
+        "Allows the profile owner to update their encrypted contact info or encryption key.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - UpdateContact context with profile PDA and owner",
+        "* `params` - Updated contact information (optional fields)",
+        "",
+        "# Access Control",
+        "",
+        "Only the profile owner can update their contact information."
+      ],
+      "discriminator": [
+        112,
+        131,
+        30,
+        238,
+        150,
+        187,
+        74,
+        235
+      ],
+      "accounts": [
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "owner",
+          "relations": [
+            "profile"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "UpdateContactParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_trade_stats",
+      "docs": [
+        "Update trade statistics",
+        "",
+        "Called by the Trade program to update user's trading statistics after",
+        "a trade completes or is disputed.",
+        "",
+        "# Arguments",
+        "",
+        "* `ctx` - UpdateTradeStats context with profile, caller program, and hub_config",
+        "* `params` - Trade statistics to update",
+        "",
+        "# Access Control",
+        "",
+        "Only the Trade program (verified via Hub config) can call this instruction."
+      ],
+      "discriminator": [
+        171,
+        169,
+        113,
+        43,
+        225,
+        230,
+        69,
+        231
+      ],
+      "accounts": [
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile.owner",
+                "account": "UserProfile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller_program",
+          "docs": [
+            "The program claiming to be the caller (must match Hub's trade_program)"
+          ]
+        },
+        {
+          "name": "hub_config",
+          "docs": [
+            "Hub config for authorization - verifies caller is authorized program"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  98,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                67,
+                117,
+                122,
+                164,
+                251,
+                236,
+                143,
+                39,
+                234,
+                202,
+                7,
+                8,
+                0,
+                75,
+                48,
+                206,
+                65,
+                61,
+                29,
+                231,
+                32,
+                159,
+                221,
+                71,
+                20,
+                138,
+                111,
+                39,
+                178,
+                82,
+                244
+              ]
+            }
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "UpdateTradeStatsParams"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "HubConfig",
+      "discriminator": [
+        115,
+        89,
+        81,
+        4,
+        182,
+        207,
+        219,
+        46
+      ]
+    },
+    {
+      "name": "UserProfile",
+      "discriminator": [
+        32,
+        37,
+        119,
+        205,
+        179,
+        180,
+        13,
+        194
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ActiveCountersUpdated",
+      "discriminator": [
+        30,
+        110,
+        104,
+        164,
+        100,
+        131,
+        156,
+        238
+      ]
+    },
+    {
+      "name": "ContactUpdated",
+      "discriminator": [
+        55,
+        64,
+        84,
+        142,
+        43,
+        152,
+        215,
+        46
+      ]
+    },
+    {
+      "name": "ProfileCreated",
+      "discriminator": [
+        134,
+        233,
+        199,
+        153,
+        77,
+        206,
+        128,
+        94
+      ]
+    },
+    {
+      "name": "TradeStatsUpdated",
+      "discriminator": [
+        229,
+        111,
+        215,
+        59,
+        192,
+        154,
+        9,
+        29
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "Unauthorized: only profile owner can perform this action"
+    },
+    {
+      "code": 6001,
+      "name": "ContactInfoTooLong",
+      "msg": "Contact information exceeds maximum length (280 characters)"
+    },
+    {
+      "code": 6002,
+      "name": "EncryptionKeyTooLong",
+      "msg": "Encryption key exceeds maximum length (280 characters)"
+    },
+    {
+      "code": 6003,
+      "name": "UnauthorizedProgramCall",
+      "msg": "Unauthorized: only authorized programs can update profile statistics"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidCounterOperation",
+      "msg": "Invalid counter operation: would result in negative value"
+    },
+    {
+      "code": 6005,
+      "name": "ActiveOffersOverflow",
+      "msg": "Active offers counter overflow"
+    },
+    {
+      "code": 6006,
+      "name": "ActiveTradesOverflow",
+      "msg": "Active trades counter overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "ActiveCountersUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "active_offers",
+            "type": "u8"
+          },
+          {
+            "name": "active_trades",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ContactUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "profile_address",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CounterOperation",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Increment"
+          },
+          {
+            "name": "Decrement"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CounterType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "ActiveOffers"
+          },
+          {
+            "name": "ActiveTrades"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CreateProfileParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "contact_info",
+            "type": "string"
+          },
+          {
+            "name": "encryption_key",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HubConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "admin",
+            "docs": [
+              "Admin authority"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "offer_program",
+            "docs": [
+              "Program addresses"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "trade_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "profile_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "arbitrator_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_oracle_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "burn_fee_pct",
+            "docs": [
+              "Fee configuration (basis points, 10000 = 100%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "chain_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "warchest_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "conversion_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "arbitrator_fee_pct",
+            "type": "u16"
+          },
+          {
+            "name": "min_trade_amount",
+            "docs": [
+              "Trading limits (USD cents)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_trade_amount",
+            "type": "u64"
+          },
+          {
+            "name": "max_active_offers",
+            "type": "u8"
+          },
+          {
+            "name": "max_active_trades",
+            "type": "u8"
+          },
+          {
+            "name": "trade_expiration_timer",
+            "docs": [
+              "Timers (seconds)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "trade_dispute_timer",
+            "type": "u64"
+          },
+          {
+            "name": "global_pause",
+            "docs": [
+              "Circuit breakers"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "pause_new_offers",
+            "type": "bool"
+          },
+          {
+            "name": "pause_new_trades",
+            "type": "bool"
+          },
+          {
+            "name": "pause_escrow_funding",
+            "type": "bool"
+          },
+          {
+            "name": "pause_escrow_release",
+            "type": "bool"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Treasury addresses"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "warchest",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProfileCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "profile_address",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeStatsUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_trades",
+            "type": "u64"
+          },
+          {
+            "name": "completed_trades",
+            "type": "u64"
+          },
+          {
+            "name": "disputed_trades",
+            "type": "u64"
+          },
+          {
+            "name": "reputation_score",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateActiveCountersParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "counter_type",
+            "type": {
+              "defined": {
+                "name": "CounterType"
+              }
+            }
+          },
+          {
+            "name": "operation",
+            "type": {
+              "defined": {
+                "name": "CounterOperation"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateContactParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "contact_info",
+            "type": {
+              "option": "string"
+            }
+          },
+          {
+            "name": "encryption_key",
+            "type": {
+              "option": "string"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateTradeStatsParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "is_buy",
+            "type": "bool"
+          },
+          {
+            "name": "fiat_amount",
+            "type": "u64"
+          },
+          {
+            "name": "completed",
+            "type": "bool"
+          },
+          {
+            "name": "disputed",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserProfile",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Profile owner"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "contact_info",
+            "docs": [
+              "Encrypted contact information (max 280 chars)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "encryption_key",
+            "docs": [
+              "Encryption key for contact info (max 280 chars)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "total_trades",
+            "docs": [
+              "Trading statistics"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "completed_trades",
+            "type": "u64"
+          },
+          {
+            "name": "disputed_trades",
+            "type": "u64"
+          },
+          {
+            "name": "total_buy_volume",
+            "type": "u64"
+          },
+          {
+            "name": "total_sell_volume",
+            "type": "u64"
+          },
+          {
+            "name": "active_offers",
+            "docs": [
+              "Active counters (for limit enforcement)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "active_trades",
+            "type": "u8"
+          },
+          {
+            "name": "reputation_score",
+            "docs": [
+              "Reputation score (0-10000 basis points, 10000 = 100%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamps"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

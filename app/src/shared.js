@@ -65,6 +65,11 @@ export function formatTradeState(state) {
 }
 
 export function calculateFiatPriceByRate(fiatPrice, offerRate) {
+  // Handle null, undefined, or NaN fiatPrice
+  if (fiatPrice === null || fiatPrice === undefined || isNaN(fiatPrice)) {
+    return 0
+  }
+  
   if (offerRate === 0) {
     return fiatPrice
   }
@@ -140,8 +145,13 @@ export function addTelegramURLPrefix(telegram) {
 
 export async function formatEncryptedUserContact(privateKey, profileContact) {
   if (profileContact !== undefined) {
-    const decryptedContact = await decryptData(privateKey, profileContact)
-    return decryptedContact !== '' ? addTelegramHandlePrefix(decryptedContact) : decryptedContact
+    try {
+      const decryptedContact = await decryptData(privateKey, profileContact)
+      return decryptedContact !== '' ? addTelegramHandlePrefix(decryptedContact) : decryptedContact
+    } catch (e) {
+      console.warn('Failed to decrypt contact, returning empty string:', e)
+      return ''
+    }
   } else {
     return ''
   }

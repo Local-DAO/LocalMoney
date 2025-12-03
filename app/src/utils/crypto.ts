@@ -8,7 +8,14 @@ const algorithm = {
   },
 }
 
-const vector = window.crypto.getRandomValues(new Uint8Array(16))
+let vector: Uint8Array | null = null
+
+function getVector(): Uint8Array {
+  if (!vector && typeof window !== 'undefined') {
+    vector = window.crypto.getRandomValues(new Uint8Array(16))
+  }
+  return vector!
+}
 
 export async function generateKeys(): Promise<Secrets> {
   const keys = await window.crypto.subtle.generateKey(algorithm, true, ['encrypt', 'decrypt'])
@@ -16,16 +23,25 @@ export async function generateKeys(): Promise<Secrets> {
 }
 
 export async function encryptData(publicKey: string, data: string): Promise<string> {
-  const key = await importPublicKey(publicKey)
-  const encryptedData = await window.crypto.subtle.encrypt(
-    {
-      name: 'RSA-OAEP',
-      iv: vector,
-    },
-    key,
-    textToArrayBuffer(data)
-  )
-  return arrayBufferToBase64(encryptedData)
+  if (!publicKey || typeof publicKey !== 'string') {
+    throw new Error('Invalid public key: empty or not a string')
+  }
+
+  try {
+    const key = await importPublicKey(publicKey)
+    const encryptedData = await window.crypto.subtle.encrypt(
+      {
+        name: 'RSA-OAEP',
+        iv: getVector(),
+      },
+      key,
+      textToArrayBuffer(data)
+    )
+    return arrayBufferToBase64(encryptedData)
+  } catch (e) {
+    console.error('Encryption failed:', e)
+    throw new Error(`Failed to encrypt data: ${e.message}`)
+  }
 }
 
 export async function decryptData(privateKey: string, encryptedData: string): Promise<string> {
@@ -34,7 +50,7 @@ export async function decryptData(privateKey: string, encryptedData: string): Pr
     const decryptedData = await window.crypto.subtle.decrypt(
       {
         name: 'RSA-OAEP',
-        iv: vector,
+        iv: getVector(),
       },
       key,
       base64ToArrayBuffer(encryptedData)
@@ -80,12 +96,33 @@ function arrayBufferToText(arrayBuffer: ArrayBuffer): string {
 }
 
 function base64ToArrayBuffer(b64str: string): ArrayBuffer {
-  const byteStr = atob(b64str)
-  const bytes = new Uint8Array(byteStr.length)
-  for (let i = 0; i < byteStr.length; i++) {
-    bytes[i] = byteStr.charCodeAt(i)
+  // Validate and clean the base64 string
+  if (!b64str || typeof b64str !== 'string') {
+    throw new Error('Invalid base64 string: empty or not a string')
   }
-  return bytes.buffer
+  
+  // Remove any whitespace or line breaks
+  const cleanB64 = b64str.replace(/\s/g, '')
+  
+  // Check if it's a valid base64 string
+  const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/
+  if (!base64Regex.test(cleanB64)) {
+    throw new Error('Invalid base64 string format')
+  }
+  
+  // Ensure proper padding
+  const paddedB64 = cleanB64.padEnd(cleanB64.length + (4 - cleanB64.length % 4) % 4, '=')
+  
+  try {
+    const byteStr = atob(paddedB64)
+    const bytes = new Uint8Array(byteStr.length)
+    for (let i = 0; i < byteStr.length; i++) {
+      bytes[i] = byteStr.charCodeAt(i)
+    }
+    return bytes.buffer
+  } catch (e) {
+    throw new Error(`Failed to decode base64 string: ${e.message}`)
+  }
 }
 
 function arrayBufferToBase64(arr: ArrayBuffer): string {
